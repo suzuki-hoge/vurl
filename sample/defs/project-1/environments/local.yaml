@@ -1,0 +1,21 @@
+name: local
+
+constants:
+  base_url:
+    value: http://localhost:18080
+  api_version:
+    value: v1
+  tenant_id:
+    value: local-tenant
+
+variables:
+  auth_token:
+    value: local-token-initial
+    mask: xxx
+  login_id:
+    value: local-user
+  login_password:
+    value: local-password
+    mask: xxx
+  user_id:
+    value: "42"
