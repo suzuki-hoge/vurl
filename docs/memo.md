@@ -1,0 +1,23 @@
+# Memo
+
+- ログの `curl` コマンドをもう少し整形したい
+- 画面レイアウトを調整したい
+- 画面が大きすぎて収まっていない
+- `input password` を `text` にしたい
+- Enter で送信できるようにしたい
+- 環境ごとに使う `id` / `password` を事前保存しておいて選択式にしたい
+- `id` / `password` は任意入力にもしたい
+- ブラウザで複数タブを使ってリクエストを投げたい
+- ページタイトル、タブ名を調整したい
+- 最後に送信した `project` や `environment` をサーバで記憶し、新しく開いたらそれを初期設定としたい
+- テストコードの整備とリファクタリング
+- ドキュメントの整備
+- `POST /api/send` の integration test を追加したい
+- 認証リトライの test を追加したい
+- ログ出力の test を追加したい
+- `fixed.default` の test を追加したい
+- `http` 認証の test を追加したい
+- frontend の責務分割を進めたい
+- backend の service 層の責務を整理したい
+- API 入出力型と domain 型の境界を整理したい
+- supervisor 周りのコードを整理したい
