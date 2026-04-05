@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react"
 import { apiClient } from "../api/client"
 import { filterNodes } from "../lib/tree"
 import type {
+  AuthPresetSummary,
   DefinitionResponse,
+  EnvironmentSummary,
   RequestDefinition,
   RequestKeyValue,
   RequestTreeNode,
@@ -48,6 +50,9 @@ const emptyDraft: DraftState = {
 export function App() {
   const [projects, setProjects] = useState<string[]>([])
   const [project, setProject] = useState("")
+  const [environmentSummaries, setEnvironmentSummaries] = useState<
+    EnvironmentSummary[]
+  >([])
   const [environments, setEnvironments] = useState<string[]>([])
   const [environment, setEnvironment] = useState("")
   const [tree, setTree] = useState<RequestTreeNode[]>([])
@@ -55,6 +60,11 @@ export function App() {
   const [draft, setDraft] = useState<DraftState>(emptyDraft)
   const [response, setResponse] = useState<SendResponse | null>(null)
   const [logFile, setLogFile] = useState("")
+  const [authInputMode, setAuthInputMode] = useState<"preset" | "manual">(
+    "manual"
+  )
+  const [authPresets, setAuthPresets] = useState<AuthPresetSummary[]>([])
+  const [selectedAuthPreset, setSelectedAuthPreset] = useState("__manual__")
   const [authId, setAuthId] = useState("")
   const [authPassword, setAuthPassword] = useState("")
   const [error, setError] = useState("")
@@ -71,6 +81,32 @@ export function App() {
     }
     void loadProjectData(project)
   }, [project])
+
+  useEffect(() => {
+    const summary = environmentSummaries.find((item) => item.name === environment)
+    const presets = summary?.auth_presets ?? []
+    setAuthPresets(presets)
+
+    if (presets.length === 0) {
+      setAuthInputMode("manual")
+      setSelectedAuthPreset("__manual__")
+      return
+    }
+
+    setSelectedAuthPreset((current) => {
+      const next =
+        current !== "__manual__" &&
+        presets.some((preset) => preset.name === current)
+          ? current
+          : presets[0].name
+
+      if (authInputMode === "preset") {
+        setAuthId("")
+        setAuthPassword("")
+      }
+      return next
+    })
+  }, [authInputMode, environment, environmentSummaries])
 
   async function bootstrap() {
     try {
@@ -95,6 +131,7 @@ export function App() {
         apiClient.environments(nextProject),
         apiClient.tree(nextProject)
       ])
+      setEnvironmentSummaries(envs)
       const nextEnvironments = envs.map((item) => item.name)
       setEnvironments(nextEnvironments)
       setEnvironment((current) =>
@@ -155,6 +192,11 @@ export function App() {
             ? { type: "json", text: draft.body.text }
             : { type: "form", form: sanitizePairs(draft.body.form) },
         auth_enabled: draft.auth,
+        auth_input_mode: authInputMode,
+        auth_preset_name:
+          authInputMode === "preset" && selectedAuthPreset !== "__manual__"
+            ? selectedAuthPreset
+            : undefined,
         auth_credentials: {
           id: authId,
           password: authPassword
@@ -314,10 +356,43 @@ export function App() {
               <span>Authentication</span>
             </label>
             <label className="field compact">
+              <span>Input</span>
+              <select
+                value={authInputMode}
+                onChange={(event) => {
+                  const nextMode = event.target.value as "preset" | "manual"
+                  setAuthInputMode(nextMode)
+                }}
+              >
+                <option value="manual">manual</option>
+                <option value="preset" disabled={authPresets.length === 0}>
+                  preset
+                </option>
+              </select>
+            </label>
+            {authInputMode === "preset" ? (
+              <label className="field compact">
+                <span>Preset</span>
+                <select
+                  value={selectedAuthPreset}
+                  onChange={(event) => setSelectedAuthPreset(event.target.value)}
+                >
+                  {authPresets.map((preset) => (
+                    <option key={preset.name} value={preset.name}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="field compact">
               <span>ID</span>
               <input
                 value={authId}
-                onChange={(event) => setAuthId(event.target.value)}
+                onChange={(event) => {
+                  setAuthId(event.target.value)
+                }}
+                disabled={authInputMode === "preset"}
               />
             </label>
             <label className="field compact">
@@ -325,7 +400,10 @@ export function App() {
               <input
                 type="password"
                 value={authPassword}
-                onChange={(event) => setAuthPassword(event.target.value)}
+                onChange={(event) => {
+                  setAuthPassword(event.target.value)
+                }}
+                disabled={authInputMode === "preset"}
               />
             </label>
           </div>

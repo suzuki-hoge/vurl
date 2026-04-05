@@ -364,8 +364,9 @@ environments:
   local:
     mode: fixed
     credentials:
-      source: react_input
-      mappings: []
+      presets: []
+    mappings:
+      items: []
       default:
         variables:
           auth_token: token

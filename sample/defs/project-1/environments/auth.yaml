@@ -2,14 +2,17 @@ environments:
   local:
     mode: fixed
     credentials:
-      source: react_input
-      mappings:
+      presets:
+        - name: local-user
+          id: local-user
+        - name: admin
+          id: admin
+    mappings:
+      items:
         - id: local-user
-          password: local-password
           variables:
             auth_token: local-token-for-user
         - id: admin
-          password: adminpw
           variables:
             auth_token: local-token-for-admin
       default:
@@ -18,6 +21,11 @@ environments:
 
   stg:
     mode: http
+    credentials:
+      presets:
+        - name: qa-user
+          id: qa-user
+          password: qa-password
     request:
       method: POST
       url: "{{base_url}}/auth"

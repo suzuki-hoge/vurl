@@ -6,12 +6,50 @@ use serde_json::Value;
 
 use crate::{
     domain::{
-        api::{AuthCredentials, HeaderEntry, RequestBodyDraft},
-        auth::{AuthBody, AuthEnvironment, ResponseInjectRule},
+        api::{AuthCredentials, AuthInputMode, HeaderEntry, RequestBodyDraft},
+        auth::{AuthBody, AuthEnvironment, AuthCredentialPreset, ResponseInjectRule},
     },
     runtime::store::RuntimeStore,
-    services::resolver::ResolveContext,
+    services::{logging::append_raw_log, resolver::ResolveContext},
 };
+
+pub fn resolve_auth_credentials(
+    store: &RuntimeStore,
+    project: &str,
+    environment: &str,
+    input_mode: &AuthInputMode,
+    preset_name: Option<&str>,
+    manual_credentials: &AuthCredentials,
+) -> Result<AuthCredentials> {
+    match input_mode {
+        AuthInputMode::Manual => Ok(manual_credentials.clone()),
+        AuthInputMode::Preset => {
+            let auth_definitions = &store.project(project)?.auth;
+            let auth = auth_definitions
+                .environments
+                .get(environment)
+                .with_context(|| format!("auth environment not found: {project}/{environment}"))?;
+
+            let preset_name = preset_name.context("auth preset name is required")?;
+            let preset = match auth {
+                AuthEnvironment::Fixed { credentials, .. } => {
+                    find_preset(&credentials.presets, preset_name)?
+                }
+                AuthEnvironment::Http { credentials, .. } => {
+                    let credentials = credentials
+                        .as_ref()
+                        .context("auth presets not configured for http auth")?;
+                    find_preset(&credentials.presets, preset_name)?
+                }
+            };
+
+            Ok(AuthCredentials {
+                id: preset.id.clone(),
+                password: preset.password.clone().unwrap_or_default(),
+            })
+        }
+    }
+}
 
 pub async fn authenticate(
     store: &RuntimeStore,
@@ -26,14 +64,14 @@ pub async fn authenticate(
         .with_context(|| format!("auth environment not found: {project}/{environment}"))?;
 
     match auth {
-        AuthEnvironment::Fixed { credentials: fixed } => {
-            for mapping in &fixed.mappings {
-                if mapping.id == credentials.id && mapping.password == credentials.password {
+        AuthEnvironment::Fixed { mappings, .. } => {
+            for mapping in &mappings.items {
+                if mapping.id == credentials.id {
                     return Ok(mapping.variables.clone());
                 }
             }
 
-            if let Some(default) = &fixed.default {
+            if let Some(default) = &mappings.default {
                 return Ok(default.variables.clone());
             }
 
@@ -42,6 +80,7 @@ pub async fn authenticate(
         AuthEnvironment::Http {
             request,
             response: auth_response,
+            ..
         } => {
             let runtime = store.env_state(project, environment)?;
             let resolver = ResolveContext {
@@ -54,6 +93,7 @@ pub async fn authenticate(
             let url = resolver.resolve_string(&request.url)?;
             let headers = resolver.resolve_entries(&request.headers)?;
             let body = resolve_auth_body(&resolver, &request.body)?;
+            let curl = build_auth_curl(&request.method, &url, &headers, &body);
 
             let client = reqwest::Client::builder().build()?;
             let mut req = client.request(method, url);
@@ -65,6 +105,7 @@ pub async fn authenticate(
             let response = req.send().await?;
             let status = response.status();
             let text = response.text().await?;
+            let _ = append_raw_log(store, project, &curl, &text);
             if !status.is_success() {
                 bail!("auth request failed: {status} {text}");
             }
@@ -79,6 +120,51 @@ pub async fn authenticate(
             Ok(updates)
         }
     }
+}
+
+fn build_auth_curl(
+    method: &str,
+    url: &str,
+    headers: &[crate::domain::api::KeyValueEntry],
+    body: &RequestBodyDraft,
+) -> String {
+    let mut lines = vec![format!("curl -X {method} '{url}'")];
+    for header in headers {
+        lines.push(format!(
+            "  -H '{}: {}'",
+            escape_single(&header.key),
+            escape_single(&header.value)
+        ));
+    }
+
+    match body {
+        RequestBodyDraft::Json { text } => {
+            if !text.trim().is_empty() {
+                lines.push(format!("  --data-raw '{}'", escape_single(text)));
+            }
+        }
+        RequestBodyDraft::Form { form } => {
+            for entry in form {
+                lines.push(format!(
+                    "  -d '{}={}'",
+                    escape_single(&entry.key),
+                    escape_single(&entry.value)
+                ));
+            }
+        }
+    }
+
+    lines.join(" \\\n")
+}
+
+fn find_preset<'a>(
+    presets: &'a [AuthCredentialPreset],
+    preset_name: &str,
+) -> Result<&'a AuthCredentialPreset> {
+    presets
+        .iter()
+        .find(|preset| preset.name == preset_name)
+        .with_context(|| format!("auth preset not found: {preset_name}"))
 }
 
 fn resolve_auth_body(resolver: &ResolveContext, body: &AuthBody) -> Result<RequestBodyDraft> {
@@ -141,6 +227,10 @@ fn extract_json_path(json: &Value, rule: &ResponseInjectRule) -> Result<Option<S
     };
 
     Ok(result)
+}
+
+fn escape_single(value: &str) -> String {
+    value.replace('\'', "'\\''")
 }
 
 pub fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HeaderEntry> {

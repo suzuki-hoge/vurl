@@ -63,14 +63,34 @@ pub fn append_request_log(
     response_body: &str,
 ) -> Result<PathBuf> {
     let file = ensure_log_file(store, project)?;
-    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S JST");
-    let mut text = format!("# {timestamp}\n```bash\n{curl_command}\n{response_body}\n```\n\n");
+    let mut text = log_block(curl_command, response_body);
 
     for (value, mask) in resolver.masks() {
         if !value.is_empty() {
             text = text.replace(&value, &mask);
         }
     }
+
+    let mut handle = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file)
+        .with_context(|| format!("failed to open {}", file.display()))?;
+    handle
+        .write_all(text.as_bytes())
+        .with_context(|| format!("failed to append {}", file.display()))?;
+
+    Ok(file)
+}
+
+pub fn append_raw_log(
+    store: &RuntimeStore,
+    project: &str,
+    curl_command: &str,
+    response_body: &str,
+) -> Result<PathBuf> {
+    let file = ensure_log_file(store, project)?;
+    let text = log_block(curl_command, response_body);
 
     let mut handle = OpenOptions::new()
         .create(true)
@@ -103,6 +123,11 @@ fn touch(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+fn log_block(curl_command: &str, response_body: &str) -> String {
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S JST");
+    format!("# {timestamp}\n```bash\n{curl_command}\n{response_body}\n```\n\n")
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -110,7 +135,7 @@ mod tests {
     use anyhow::Result;
     use tempfile::tempdir;
 
-    use super::append_request_log;
+    use super::{append_raw_log, append_request_log};
     use crate::{
         config::paths::AppPaths,
         domain::api::AuthCredentials,
@@ -147,6 +172,25 @@ mod tests {
         assert!(text.contains("X-Token: xxx"));
         assert!(text.contains("{\"token\":\"xxx\"}"));
         assert!(!text.contains("secret-token"));
+        Ok(())
+    }
+
+    #[test]
+    fn append_raw_log_does_not_mask_values() -> Result<()> {
+        let tmp = tempdir()?;
+        let paths = AppPaths::new(tmp.path())?;
+        let store = RuntimeStore::load(paths)?;
+
+        let file = append_raw_log(
+            &store,
+            "project-1",
+            "curl -X POST 'http://example.test' \\\n  -H 'X-Token: secret-token'",
+            "{\"token\":\"secret-token\"}",
+        )?;
+
+        let text = std::fs::read_to_string(file)?;
+        assert!(text.contains("secret-token"));
+        assert!(text.contains("```bash"));
         Ok(())
     }
 }

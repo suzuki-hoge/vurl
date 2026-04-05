@@ -2,10 +2,13 @@ use anyhow::{Context, Result};
 use reqwest::Method;
 
 use crate::{
-    domain::api::{SendRequest, SendResponse},
+    domain::{
+        api::{SendRequest, SendResponse},
+        auth::AuthEnvironment,
+    },
     runtime::store::RuntimeStore,
     services::{
-        auth::{authenticate, response_headers},
+        auth::{authenticate, resolve_auth_credentials, response_headers},
         logging::append_request_log,
         resolver::ResolveContext,
     },
@@ -13,9 +16,23 @@ use crate::{
 
 pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Result<SendResponse> {
     let mut env_state = store.env_state(&payload.project, &payload.environment)?;
-    let auth = payload.auth_credentials.clone();
+    let auth = resolve_auth_credentials(
+        store,
+        &payload.project,
+        &payload.environment,
+        &payload.auth_input_mode,
+        payload.auth_preset_name.as_deref(),
+        &payload.auth_credentials,
+    )?;
 
-    if payload.auth_enabled {
+    if payload.auth_enabled
+        && should_authenticate_before_request(
+            store,
+            &payload.project,
+            &payload.environment,
+            &env_state,
+        )?
+    {
         let updates = authenticate(store, &payload.project, &payload.environment, &auth).await?;
         env_state = store.update_env_variables(&payload.project, &payload.environment, &updates)?;
     }
@@ -165,4 +182,28 @@ fn encode(value: &str) -> String {
 
 fn escape_single(value: &str) -> String {
     value.replace('\'', "'\\''")
+}
+
+fn should_authenticate_before_request(
+    store: &RuntimeStore,
+    project: &str,
+    environment: &str,
+    env_state: &crate::models::runtime::RuntimeEnvironmentState,
+) -> Result<bool> {
+    let auth = store
+        .project(project)?
+        .auth
+        .environments
+        .get(environment)
+        .with_context(|| format!("auth environment not found: {project}/{environment}"))?;
+
+    Ok(match auth {
+        AuthEnvironment::Fixed { .. } => true,
+        AuthEnvironment::Http { response, .. } => response.inject.iter().any(|rule| {
+            env_state
+                .variables
+                .get(&rule.to)
+                .is_none_or(|value| value.trim().is_empty())
+        }),
+    })
 }

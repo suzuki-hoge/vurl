@@ -4,6 +4,11 @@ export type ProjectSummary = {
 
 export type EnvironmentSummary = {
   name: string
+  auth_presets: AuthPresetSummary[]
+}
+
+export type AuthPresetSummary = {
+  name: string
 }
 
 export type RequestTreeNode =
@@ -80,6 +85,8 @@ export type SendRequestPayload = {
         form: RequestKeyValue[]
       }
   auth_enabled: boolean
+  auth_input_mode: "preset" | "manual"
+  auth_preset_name?: string
   auth_credentials: {
     id: string
     password: string

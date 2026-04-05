@@ -92,10 +92,12 @@ environments:
   azisai:
     mode: fixed
     credentials:
-      source: react_input
-      mappings:
+      presets:
+        - name: preset-1
+          id: "1"
+    mappings:
+      items:
         - id: "1"
-          password: ""
           variables:
             user_token: "..."
             asken_token: "..."
@@ -119,6 +121,11 @@ environments:
 environments:
   staging:
     mode: http
+    credentials:
+      presets:
+        - name: staging-user
+          id: "1"
+          password: abc
     request:
       method: POST
       url: "{{base_url}}/auth/login/2"

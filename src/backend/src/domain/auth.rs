@@ -13,26 +13,39 @@ pub struct AuthDefinitions {
 #[serde(tag = "mode", rename_all = "lowercase")]
 pub enum AuthEnvironment {
     Fixed {
-        credentials: FixedAuthCredentials,
+        credentials: AuthCredentialOptions,
+        mappings: FixedAuthMappings,
     },
     Http {
+        credentials: Option<AuthCredentialOptions>,
         request: AuthHttpRequest,
         response: AuthResponse,
     },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct FixedAuthCredentials {
-    pub source: String,
+pub struct AuthCredentialOptions {
     #[serde(default)]
-    pub mappings: Vec<FixedAuthMapping>,
+    pub presets: Vec<AuthCredentialPreset>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AuthCredentialPreset {
+    pub name: String,
+    pub id: String,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct FixedAuthMappings {
+    #[serde(default)]
+    pub items: Vec<FixedAuthMapping>,
     pub default: Option<FixedAuthDefault>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FixedAuthMapping {
     pub id: String,
-    pub password: String,
     pub variables: HashMap<String, String>,
 }
 

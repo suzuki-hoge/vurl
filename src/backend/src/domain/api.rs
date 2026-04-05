@@ -11,6 +11,13 @@ pub struct ProjectSummary {
 #[derive(Debug, Clone, Serialize)]
 pub struct EnvironmentSummary {
     pub name: String,
+    #[serde(default)]
+    pub auth_presets: Vec<AuthPresetSummary>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AuthPresetSummary {
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,8 +73,17 @@ pub struct SendRequest {
     pub headers: Vec<KeyValueEntry>,
     pub body: RequestBodyDraft,
     pub auth_enabled: bool,
+    pub auth_input_mode: AuthInputMode,
+    pub auth_preset_name: Option<String>,
     #[serde(default)]
     pub auth_credentials: AuthCredentials,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthInputMode {
+    Preset,
+    Manual,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

@@ -3,9 +3,10 @@ use serde::Deserialize;
 
 use crate::{
     domain::api::{
-        DefinitionResponse, EnvironmentSummary, LogFileResponse, ProjectSummary, RuntimeInfo,
-        SendRequest, TreeResponse,
+        AuthPresetSummary, DefinitionResponse, EnvironmentSummary, LogFileResponse,
+        ProjectSummary, RuntimeInfo, SendRequest, TreeResponse,
     },
+    domain::auth::AuthEnvironment,
     services::{logging::create_manual_log_file, request_execution::execute_request},
     state::app_state::AppState,
 };
@@ -53,12 +54,39 @@ pub async fn environments(
     state: web::Data<AppState>,
     query: web::Query<ProjectQuery>,
 ) -> actix_web::Result<impl Responder> {
-    let items = state
+    let project = state
         .store
-        .environment_names(&query.project)
-        .map_err(actix_web::error::ErrorBadRequest)?
+        .project(&query.project)
+        .map_err(actix_web::error::ErrorBadRequest)?;
+    let mut names: Vec<_> = project.environments.keys().cloned().collect();
+    names.sort();
+    let items = names
         .into_iter()
-        .map(|name| EnvironmentSummary { name })
+        .map(|name| {
+            let auth_presets = match project.auth.environments.get(&name) {
+                Some(AuthEnvironment::Fixed { credentials, .. }) => credentials
+                    .presets
+                    .iter()
+                    .map(|preset| AuthPresetSummary {
+                        name: preset.name.clone(),
+                    })
+                    .collect(),
+                Some(AuthEnvironment::Http { credentials, .. }) => credentials
+                    .as_ref()
+                    .map(|value| {
+                        value
+                            .presets
+                            .iter()
+                            .map(|preset| AuthPresetSummary {
+                                name: preset.name.clone(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                None => Vec::new(),
+            };
+            EnvironmentSummary { name, auth_presets }
+        })
         .collect::<Vec<_>>();
     Ok(web::Json(items))
 }
