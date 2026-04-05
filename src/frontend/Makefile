@@ -1,0 +1,14 @@
+.PHONY: dev build fix
+
+NODEENV_VERSION := 24.0.0
+
+dev:
+	NODENV_VERSION=$(NODEENV_VERSION) yarn dev
+
+build:
+	NODENV_VERSION=$(NODEENV_VERSION) yarn build
+
+fix:
+	NODENV_VERSION=$(NODEENV_VERSION) yarn format
+	NODENV_VERSION=$(NODEENV_VERSION) yarn lint
+	NODENV_VERSION=$(NODEENV_VERSION) yarn test

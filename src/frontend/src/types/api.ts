@@ -1,0 +1,100 @@
+export type ProjectSummary = {
+  name: string
+}
+
+export type EnvironmentSummary = {
+  name: string
+}
+
+export type RequestTreeNode =
+  | {
+      type: "directory"
+      name: string
+      path: string
+      children: RequestTreeNode[]
+    }
+  | {
+      type: "request"
+      name: string
+      path: string
+      title: string
+      method: string
+    }
+
+export type RequestKeyValue = {
+  key: string
+  value: string
+}
+
+export type RequestDefinition = {
+  name: string
+  method: string
+  path: string
+  auth: boolean
+  request: {
+    query: RequestKeyValue[]
+    headers: RequestKeyValue[]
+    body:
+      | {
+          type: "json"
+          text: string
+        }
+      | {
+          type: "form"
+          form: RequestKeyValue[]
+        }
+  }
+}
+
+export type DefinitionResponse = {
+  path: string
+  definition: RequestDefinition
+}
+
+export type TreeResponse = {
+  project: string
+  nodes: RequestTreeNode[]
+}
+
+export type RuntimeInfo = {
+  root: string
+  projects: ProjectSummary[]
+  backend_url: string
+}
+
+export type SendRequestPayload = {
+  project: string
+  environment: string
+  path: string
+  method: string
+  url_path: string
+  query: RequestKeyValue[]
+  headers: RequestKeyValue[]
+  body:
+    | {
+        type: "json"
+        text: string
+      }
+    | {
+        type: "form"
+        form: RequestKeyValue[]
+      }
+  auth_enabled: boolean
+  auth_credentials: {
+    id: string
+    password: string
+  }
+}
+
+export type SendResponse = {
+  status: number
+  headers: RequestKeyValue[]
+  body: string
+  retried_auth: boolean
+  current_log_file: string
+}
+
+export type LogFileResponse = {
+  project: string
+  current_log_file: string
+}

@@ -412,19 +412,18 @@ curl -X GET 'http://localhost:8080/api/users/1?verbose=1' \
 - `vurl -y` で定義ディレクトリへ `cd` できる
 - `zsh` 前提でよい
 - Rust のプロダクションビルド名は `vurl-backend` とする
-- `zsh` から `vurl.zsh` をロードして `vurl` 関数を提供する
+- `zsh` から `bin/vurl.zsh` をロードして `vurl` 関数を提供する
 - 引数なしの `vurl` は `vurl-backend` 起動とブラウザ open を行う
-- `vurl-backend` は定義ルートディレクトリを起動引数で指定できる
 
 実現案:
 
-- `vurl.zsh` に `vurl` 関数を定義する
+- `bin/vurl.zsh` に `vurl` 関数を定義する
 - `-l` はログディレクトリへ `cd` する
 - `-y` は定義ディレクトリへ `cd` する
 - 引数なしは `vurl-backend` をバックグラウンド起動し、フロントエンド URL を open する
-- フロントエンドは `localhost` 上で動作し、ポートは固定しない
+- フロントエンドは backend から静的配信される
 - `r` はバックエンドのみ再起動する
-- 例: `vurl-backend --root ~/.vurl`
+- backend は `127.0.0.1:1357` 固定で待ち受ける
 
 ## 12. エラーハンドリング
 
@@ -472,5 +471,5 @@ curl -X GET 'http://localhost:8080/api/users/1?verbose=1' \
 1. リクエスト定義 YAML の Rust 構造体
 2. 環境 YAML の Rust 構造体
 3. 認証 YAML の Rust 構造体
-4. `vurl-backend --root ...` の CLI 引数仕様
+4. `vurl-backend` の固定起動仕様
 5. ログ出力フォーマッタの実装
