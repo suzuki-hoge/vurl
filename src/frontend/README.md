@@ -8,7 +8,8 @@
 - 3 ペインの最小レイアウト
 - 今後の機能追加先になるディレクトリ構成
 - スタイルはコンポーネントと対になる `.scss` に寄せる
-- backend URL は `VITE_BACKEND_URL` で切り替えられる
+- backend URL は `VITE_BACKEND_URL` で上書きできる
+- 未指定時は `window.location.origin` を使うため、`vurl` の本番起動ではそのまま `http://127.0.0.1:1357` を叩く
 - `.env.example` をコピーして frontend 用 `.env` を作れる
 - `Makefile` で `make dev`, `make build`, `make fix` を使える
 

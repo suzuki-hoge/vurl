@@ -15,6 +15,11 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
     let mut env_state = store.env_state(&payload.project, &payload.environment)?;
     let auth = payload.auth_credentials.clone();
 
+    if payload.auth_enabled {
+        let updates = authenticate(store, &payload.project, &payload.environment, &auth).await?;
+        env_state = store.update_env_variables(&payload.project, &payload.environment, &updates)?;
+    }
+
     let mut attempt = 0;
     let mut retried_auth = false;
 

@@ -11,7 +11,7 @@ import type {
 
 const BACKEND_URL =
   (import.meta.env.VITE_BACKEND_URL as string | undefined) ??
-  "http://127.0.0.1:18080"
+  (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:1357")
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BACKEND_URL}${path}`, {
