@@ -126,7 +126,7 @@ fn build_curl(
         crate::domain::api::RequestBodyDraft::Form { form } => {
             for entry in form {
                 lines.push(format!(
-                    "  --data-urlencode '{}={}'",
+                    "  -d '{}={}'",
                     escape_single(&entry.key),
                     escape_single(&entry.value)
                 ));

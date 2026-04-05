@@ -102,3 +102,51 @@ fn touch(path: &PathBuf) -> Result<()> {
         .with_context(|| format!("failed to create {}", path.display()))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use anyhow::Result;
+    use tempfile::tempdir;
+
+    use super::append_request_log;
+    use crate::{
+        config::paths::AppPaths,
+        domain::api::AuthCredentials,
+        models::runtime::RuntimeEnvironmentState,
+        runtime::store::RuntimeStore,
+        services::resolver::ResolveContext,
+    };
+
+    #[test]
+    fn append_request_log_masks_values_and_writes_markdown_block() -> Result<()> {
+        let tmp = tempdir()?;
+        let paths = AppPaths::new(tmp.path())?;
+        let store = RuntimeStore::load(paths)?;
+        let resolver = ResolveContext {
+            environment: RuntimeEnvironmentState {
+                constants: HashMap::new(),
+                variables: HashMap::from([("token".to_string(), "secret-token".to_string())]),
+                masks: HashMap::from([("token".to_string(), "xxx".to_string())]),
+            },
+            auth: AuthCredentials::default(),
+        };
+
+        let file = append_request_log(
+            &store,
+            "project-1",
+            &resolver,
+            "curl -X POST 'http://example.test' \\\n  -H 'X-Token: secret-token' \\\n  -d 'token=secret-token'",
+            "{\"token\":\"secret-token\"}",
+        )?;
+
+        let text = std::fs::read_to_string(file)?;
+        assert!(text.contains("```bash"));
+        assert!(text.contains("-d 'token=xxx'"));
+        assert!(text.contains("X-Token: xxx"));
+        assert!(text.contains("{\"token\":\"xxx\"}"));
+        assert!(!text.contains("secret-token"));
+        Ok(())
+    }
+}
