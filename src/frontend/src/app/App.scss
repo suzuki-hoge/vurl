@@ -627,10 +627,33 @@ textarea {
   align-items: center;
 }
 
+.kv-row-header.is-off input {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
 .kv-footer {
   display: flex;
   justify-content: flex-end;
   margin-top: auto;
+}
+
+.header-toggle {
+  min-width: 3rem;
+  background: #182131;
+  color: var(--text-soft);
+}
+
+.header-toggle.is-enabled {
+  color: #8bd49a;
+}
+
+.header-state {
+  min-width: 3rem;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  text-align: center;
 }
 
 .body-textarea,

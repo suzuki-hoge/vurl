@@ -337,7 +337,9 @@ path: /users/{{user_id}}
 auth: true
 request:
   query: []
-  headers: []
+  headers:
+    - key: Accept
+      value: application/json
   body:
     type: json
     text: ""
@@ -388,6 +390,7 @@ environments:
         let definition = store.request_definition("project-1", "users/get-user.yaml")?;
         assert_eq!(definition.name, "Get User");
         assert_eq!(definition.method, "GET");
+        assert_eq!(definition.request.headers.len(), 1);
 
         Ok(())
     }

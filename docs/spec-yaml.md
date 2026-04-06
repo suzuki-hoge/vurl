@@ -29,8 +29,8 @@ request:
     - key: user_token
       value: "{{user_token}}"
   headers:
-    - key: X-ASKEN-TOKEN
-      value: "{{asken_token}}"
+    - key: X-APP-TOKEN
+      value: "{{app_token}}"
   body:
     type: json
     text: ""
@@ -100,11 +100,11 @@ environments:
         - id: "1"
           variables:
             user_token: "..."
-            asken_token: "..."
+            app_token: "..."
       default:
         variables:
           user_token: "..."
-          asken_token: "..."
+          app_token: "..."
 ```
 
 ルール:
@@ -143,8 +143,8 @@ environments:
       inject:
         - from: $.user_token
           to: user_token
-        - from: $.asken_token
-          to: asken_token
+        - from: $.app_token
+          to: app_token
 ```
 
 ルール:

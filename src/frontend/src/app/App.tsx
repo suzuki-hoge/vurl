@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react"
-import { FiPlus, FiSearch, FiTrash2 } from "react-icons/fi"
+import {
+  FiCheckSquare,
+  FiPlus,
+  FiSearch,
+  FiSquare,
+  FiTrash2
+} from "react-icons/fi"
 import toast from "react-hot-toast"
 
 import { apiClient } from "../api/client"
@@ -16,6 +22,14 @@ import type {
 } from "../types/api"
 import "./App.scss"
 
+type DraftHeaderState = "editable" | "locked" | "off"
+
+type DraftHeader = {
+  key: string
+  value: string
+  state: DraftHeaderState
+}
+
 type DraftState = {
   project: string
   environment: string
@@ -25,7 +39,7 @@ type DraftState = {
   urlPath: string
   auth: boolean
   query: RequestKeyValue[]
-  headers: RequestKeyValue[]
+  headers: DraftHeader[]
   body:
     | {
         type: "json"
@@ -85,6 +99,7 @@ export function App() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const effectiveHeaders = useMemo(() => buildEffectiveHeaders(draft), [draft])
 
   useEffect(() => {
     void bootstrap()
@@ -270,7 +285,7 @@ export function App() {
         method: draft.method,
         url_path: draft.urlPath,
         query: sanitizePairs(draft.query),
-        headers: sanitizePairs(draft.headers),
+        headers: sanitizeHeaderPairs(effectiveHeaders),
         body:
           draft.body.type === "json"
             ? { type: "json", text: draft.body.text }
@@ -581,10 +596,22 @@ export function App() {
                 ) : null}
 
                 {requestTab === "headers" ? (
-                  <KeyValueEditor
-                    items={draft.headers}
+                  <HeaderEditor
+                    items={effectiveHeaders}
+                    onAdd={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        headers: [
+                          ...current.headers,
+                          { key: "", value: "", state: "editable" }
+                        ]
+                      }))
+                    }
                     onChange={(items) =>
-                      setDraft((current) => ({ ...current, headers: items }))
+                      setDraft((current) => ({
+                        ...current,
+                        headers: persistHeaders(current, items)
+                      }))
                     }
                   />
                 ) : null}
@@ -860,6 +887,97 @@ function KeyValueEditor(props: {
   )
 }
 
+function HeaderEditor(props: {
+  items: DraftHeader[]
+  onChange: (items: DraftHeader[]) => void
+  onAdd: () => void
+}) {
+  const { items, onChange, onAdd } = props
+
+  return (
+    <div className="card fill-card">
+      <div className="kv-list">
+        {items.map((item, index) => {
+          const isLocked = item.state === "locked"
+          const isToggleable = item.state !== "locked"
+          const isEnabled = item.state !== "off"
+
+          return (
+            <div
+              className={`kv-row kv-row-header${item.state === "off" ? " is-off" : ""}`}
+              key={index}
+            >
+              <input
+                placeholder="key"
+                readOnly={isLocked}
+                value={item.key}
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, currentIndex) =>
+                      currentIndex === index
+                        ? { ...current, key: event.target.value }
+                        : current
+                    )
+                  )
+                }
+              />
+              <input
+                placeholder="value"
+                readOnly={isLocked}
+                value={item.value}
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, currentIndex) =>
+                      currentIndex === index
+                        ? { ...current, value: event.target.value }
+                        : current
+                    )
+                  )
+                }
+              />
+              {isToggleable ? (
+                <button
+                  aria-label={isEnabled ? "Disable header" : "Enable header"}
+                  className={`icon-button header-toggle${isEnabled ? " is-enabled" : ""}`}
+                  onClick={() =>
+                    onChange(
+                      items.map((current, currentIndex) =>
+                        currentIndex === index
+                          ? {
+                              ...current,
+                              state:
+                                current.state === "off" ? "editable" : "off"
+                            }
+                          : current
+                      )
+                    )
+                  }
+                  type="button"
+                >
+                  {isEnabled ? <FiCheckSquare /> : <FiSquare />}
+                </button>
+              ) : (
+                <div className="header-state">fixed</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="kv-footer">
+        <button
+          aria-label="Add row"
+          className="icon-button"
+          onClick={onAdd}
+          type="button"
+        >
+          <FiPlus />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function TabButton(props: {
   active: boolean
   label: string
@@ -908,7 +1026,10 @@ function definitionToDraft(
     urlPath: definition.path,
     auth: definition.auth,
     query: definition.request.query,
-    headers: definition.request.headers,
+    headers: definition.request.headers.map((header) => ({
+      ...header,
+      state: "editable"
+    })),
     body:
       definition.request.body.type === "json"
         ? { type: "json", text: definition.request.body.text }
@@ -1036,6 +1157,51 @@ function highlightJson(text: string): Array<{
 
 function sanitizePairs(items: RequestKeyValue[]): RequestKeyValue[] {
   return items.filter((item) => item.key.trim() !== "")
+}
+
+function sanitizeHeaderPairs(items: DraftHeader[]): RequestKeyValue[] {
+  return items
+    .filter((item) => item.state !== "off")
+    .filter((item) => item.key.trim() !== "")
+    .map((item) => ({ key: item.key, value: item.value }))
+}
+
+function buildEffectiveHeaders(draft: DraftState): DraftHeader[] {
+  if (!shouldInjectJsonContentType(draft)) {
+    return draft.headers
+  }
+
+  return [
+    { key: "Content-Type", value: "application/json", state: "locked" },
+    ...draft.headers
+  ]
+}
+
+function hasHeader(items: DraftHeader[], key: string): boolean {
+  const normalizedKey = key.trim().toLowerCase()
+  return items.some((item) => item.key.trim().toLowerCase() === normalizedKey)
+}
+
+function persistHeaders(
+  draft: DraftState,
+  items: DraftHeader[]
+): DraftHeader[] {
+  if (!shouldInjectJsonContentType(draft)) {
+    return items
+  }
+
+  return items.filter(
+    (item) =>
+      !(
+        item.state === "locked" &&
+        item.key.trim().toLowerCase() === "content-type" &&
+        item.value === "application/json"
+      )
+  )
+}
+
+function shouldInjectJsonContentType(draft: DraftState): boolean {
+  return draft.body.type === "json" && !hasHeader(draft.headers, "content-type")
 }
 
 function getProjectFromLocation(): string | null {
