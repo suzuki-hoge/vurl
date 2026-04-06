@@ -12,8 +12,7 @@ export function filterNodes(
 
   for (const node of nodes) {
     if (node.type === "request") {
-      const haystack =
-        `${node.path} ${node.title} ${node.name} ${node.method}`.toLowerCase()
+      const haystack = `${node.path} ${node.name}`.toLowerCase()
       if (haystack.includes(filter)) {
         result.push(node)
       }

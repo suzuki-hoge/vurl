@@ -49,7 +49,9 @@ pub struct LogFileResponse {
 pub struct SendResponse {
     pub status: u16,
     pub headers: Vec<HeaderEntry>,
+    pub content_type: Option<String>,
     pub body: String,
+    pub body_base64: Option<String>,
     pub retried_auth: bool,
     pub current_log_file: String,
 }

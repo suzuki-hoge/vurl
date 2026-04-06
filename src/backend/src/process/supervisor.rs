@@ -3,7 +3,7 @@ use std::{
     process::{Child, Command, Stdio},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::{app::build_app, cli::Cli, config::paths::AppPaths, runtime::store::RuntimeStore};
 
@@ -16,7 +16,7 @@ pub fn run_parent(cli: Cli) -> Result<()> {
     let mut child = spawn_child(&cli)?;
 
     eprintln!("vurl-backend supervisor started");
-    eprintln!("commands: c=check yaml, r=restart backend, q=quit");
+    eprintln!("commands: c=check yaml, l=new log file, r=restart backend, q=quit");
 
     let stdin = io::stdin();
     for byte in stdin.lock().bytes() {
@@ -30,6 +30,7 @@ pub fn run_parent(cli: Cli) -> Result<()> {
 
         match byte as char {
             'c' => run_check(&cli)?,
+            'l' => rotate_logs(&cli)?,
             'r' => {
                 stop_child(&mut child)?;
                 child = spawn_child(&cli)?;
@@ -56,6 +57,36 @@ fn run_check(cli: &Cli) -> Result<()> {
     let paths = AppPaths::from_default_root()?;
     let store = RuntimeStore::load(paths)?;
     eprintln!("yaml check ok: {} project(s)", store.project_names().len());
+    Ok(())
+}
+
+fn rotate_logs(cli: &Cli) -> Result<()> {
+    let _ = cli;
+    let paths = AppPaths::from_default_root()?;
+    let store = RuntimeStore::load(paths)?;
+    let projects = store.project_names();
+
+    for project in &projects {
+        let status = Command::new("curl")
+            .arg("-sS")
+            .arg("-X")
+            .arg("POST")
+            .arg("http://127.0.0.1:1357/api/logs/new")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-d")
+            .arg(format!(r#"{{"project":"{project}"}}"#))
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .status()
+            .with_context(|| format!("failed to request new log for {project}"))?;
+
+        if !status.success() {
+            bail!("backend rejected new log request for {project}");
+        }
+    }
+
+    eprintln!("log rotated: {} project(s)", projects.len());
     Ok(())
 }
 

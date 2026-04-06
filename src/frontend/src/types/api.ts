@@ -96,12 +96,9 @@ export type SendRequestPayload = {
 export type SendResponse = {
   status: number
   headers: RequestKeyValue[]
+  content_type?: string
   body: string
+  body_base64?: string
   retried_auth: boolean
-  current_log_file: string
-}
-
-export type LogFileResponse = {
-  project: string
   current_log_file: string
 }

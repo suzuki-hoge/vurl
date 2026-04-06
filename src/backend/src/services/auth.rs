@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::{
     domain::{
         api::{AuthCredentials, AuthInputMode, HeaderEntry, RequestBodyDraft},
-        auth::{AuthBody, AuthEnvironment, AuthCredentialPreset, ResponseInjectRule},
+        auth::{AuthBody, AuthCredentialPreset, AuthEnvironment, ResponseInjectRule},
     },
     runtime::store::RuntimeStore,
     services::{logging::append_raw_log, resolver::ResolveContext},

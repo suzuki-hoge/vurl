@@ -1,7 +1,6 @@
 import type {
   DefinitionResponse,
   EnvironmentSummary,
-  LogFileResponse,
   ProjectSummary,
   RuntimeInfo,
   SendRequestPayload,
@@ -47,10 +46,5 @@ export const apiClient = {
     request<SendResponse>("/api/send", {
       method: "POST",
       body: JSON.stringify(payload)
-    }),
-  createLogFile: (project: string) =>
-    request<LogFileResponse>("/api/logs/new", {
-      method: "POST",
-      body: JSON.stringify({ project })
     })
 }

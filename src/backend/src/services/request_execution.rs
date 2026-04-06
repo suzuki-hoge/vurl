@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::Method;
 
 use crate::{
@@ -70,8 +71,18 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
         req = apply_body(req, &body)?;
         let response = req.send().await?;
         let status = response.status();
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned);
         let headers_out = response_headers(response.headers());
-        let response_text = response.text().await?;
+        let response_bytes = response.bytes().await?;
+        let response_text = String::from_utf8_lossy(&response_bytes).into_owned();
+        let response_body_base64 = content_type
+            .as_deref()
+            .filter(|value| is_image_content_type(value))
+            .map(|_| STANDARD.encode(&response_bytes));
 
         if payload.auth_enabled && attempt == 0 && matches!(status.as_u16(), 401 | 403) {
             let updates =
@@ -88,11 +99,20 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
         return Ok(SendResponse {
             status: status.as_u16(),
             headers: headers_out,
+            content_type,
             body: response_text,
+            body_base64: response_body_base64,
             retried_auth,
             current_log_file: log_file.display().to_string(),
         });
     }
+}
+
+fn is_image_content_type(content_type: &str) -> bool {
+    content_type
+        .split(';')
+        .next()
+        .is_some_and(|value| value.trim().starts_with("image/"))
 }
 
 fn build_url(
