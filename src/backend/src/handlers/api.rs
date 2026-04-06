@@ -1,13 +1,19 @@
 use actix_web::{HttpResponse, Responder, get, post, web};
+use anyhow::Error as AnyhowError;
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::{
     domain::api::{
         AuthPresetSummary, DefinitionResponse, EnvironmentSummary, LogFileResponse, ProjectSummary,
-        RuntimeInfo, SendRequest, TreeResponse,
+        ResponseNotification, ResponseNotificationCode, ResponseNotificationKind, RuntimeInfo,
+        SendRequest, SendResponse, TreeResponse,
     },
     domain::auth::AuthEnvironment,
-    services::{logging::create_manual_log_file, request_execution::execute_request},
+    services::{
+        logging::create_manual_log_file,
+        request_execution::{REQUEST_TIMEOUT_MS, execute_request},
+    },
     state::app_state::AppState,
 };
 
@@ -126,10 +132,13 @@ pub async fn send(
     state: web::Data<AppState>,
     payload: web::Json<SendRequest>,
 ) -> actix_web::Result<impl Responder> {
-    let response = execute_request(&state.store, payload.into_inner())
-        .await
-        .map_err(actix_web::error::ErrorBadRequest)?;
-    Ok(web::Json(response))
+    match execute_request(&state.store, payload.into_inner()).await {
+        Ok(response) => Ok(HttpResponse::Ok().json(response)),
+        Err(error) if is_timeout_error(&error) => {
+            Ok(HttpResponse::InternalServerError().json(build_timeout_response()))
+        }
+        Err(error) => Err(actix_web::error::ErrorBadRequest(error)),
+    }
 }
 
 #[post("/api/logs/new")]
@@ -147,4 +156,36 @@ pub async fn new_log(
 
 pub async fn not_found() -> impl Responder {
     HttpResponse::NotFound().body("not found")
+}
+
+fn is_timeout_error(error: &AnyhowError) -> bool {
+    error
+        .chain()
+        .filter_map(|cause| cause.downcast_ref::<reqwest::Error>())
+        .any(reqwest::Error::is_timeout)
+}
+
+fn build_timeout_response() -> SendResponse {
+    let body = json!({
+        "error": "request_timeout",
+        "message": format!("request timed out after {}ms", REQUEST_TIMEOUT_MS),
+    })
+    .to_string();
+
+    SendResponse {
+        status: 500,
+        headers: Vec::new(),
+        content_type: Some("application/json".to_string()),
+        body,
+        body_base64: None,
+        retried_auth: false,
+        notifications: vec![ResponseNotification {
+            code: ResponseNotificationCode::Timeout,
+            kind: ResponseNotificationKind::Error,
+            message: format!(
+                "リクエスト先との通信が {REQUEST_TIMEOUT_MS}ms でタイムアウトしました"
+            ),
+        }],
+        current_log_file: String::new(),
+    }
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use reqwest::Method;
@@ -10,7 +11,9 @@ use crate::{
         auth::{AuthBody, AuthCredentialPreset, AuthEnvironment, ResponseInjectRule},
     },
     runtime::store::RuntimeStore,
-    services::{logging::append_raw_log, resolver::ResolveContext},
+    services::{
+        logging::append_raw_log, request_execution::REQUEST_TIMEOUT_MS, resolver::ResolveContext,
+    },
 };
 
 pub fn resolve_auth_credentials(
@@ -95,7 +98,9 @@ pub async fn authenticate(
             let body = resolve_auth_body(&resolver, &request.body)?;
             let curl = build_auth_curl(&request.method, &url, &headers, &body);
 
-            let client = reqwest::Client::builder().build()?;
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_millis(REQUEST_TIMEOUT_MS))
+                .build()?;
             let mut req = client.request(method, url);
             for header in headers {
                 req = req.header(&header.key, &header.value);

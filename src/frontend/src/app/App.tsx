@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { FiPlus, FiSearch, FiTrash2 } from "react-icons/fi"
+import toast from "react-hot-toast"
 
 import { apiClient } from "../api/client"
 import { filterNodes } from "../lib/tree"
@@ -7,6 +8,7 @@ import type {
   AuthPresetSummary,
   DefinitionResponse,
   EnvironmentSummary,
+  ResponseNotification,
   RequestDefinition,
   RequestKeyValue,
   RequestTreeNode,
@@ -286,11 +288,53 @@ export function App() {
       })
       setResponse(result)
       setResponseTab("body")
+      for (const notification of result.notifications) {
+        showToast(notification)
+      }
+      if (
+        !result.notifications.some(
+          (notification) => notification.code === "timeout"
+        )
+      ) {
+        showReceivedToast(result.status)
+      }
     } catch (cause) {
       setError(toErrorMessage(cause))
     } finally {
       setSending(false)
     }
+  }
+
+  function showToast(notification: ResponseNotification) {
+    if (notification.code === "authenticated") {
+      toast("Authenticated", {
+        icon: "🔐",
+        duration: 4000
+      })
+      return
+    }
+
+    if (notification.code === "timeout") {
+      toast.error("Timed out")
+      return
+    }
+
+    if (notification.kind === "error") {
+      toast.error(notification.message)
+      return
+    }
+
+    toast.success(notification.message)
+  }
+
+  function showReceivedToast(status: number) {
+    const message = `${status} Received`
+    if (status >= 400) {
+      toast.error(message)
+      return
+    }
+
+    toast.success(message)
   }
 
   const filteredTree = useMemo(
@@ -598,7 +642,7 @@ export function App() {
                 disabled={sending}
                 type="submit"
               >
-                {sending ? "Sending..." : "Send"}
+                Send
               </button>
             </div>
           </form>

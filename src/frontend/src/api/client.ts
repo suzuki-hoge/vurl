@@ -31,6 +31,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+async function requestSend(payload: SendRequestPayload): Promise<SendResponse> {
+  const response = await fetch(`${BACKEND_URL}/api/send`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  })
+
+  const contentType = response.headers.get("content-type") ?? ""
+  if (contentType.toLowerCase().includes("application/json")) {
+    return (await response.json()) as SendResponse
+  }
+
+  const text = await response.text()
+  throw new Error(text || `HTTP ${response.status}`)
+}
+
 export const apiClient = {
   runtime: () => request<RuntimeInfo>("/api/runtime"),
   projects: () => request<ProjectSummary[]>("/api/projects"),
@@ -44,9 +62,5 @@ export const apiClient = {
     request<DefinitionResponse>(
       `/api/definition?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`
     ),
-  send: (payload: SendRequestPayload) =>
-    request<SendResponse>("/api/send", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    })
+  send: (payload: SendRequestPayload) => requestSend(payload)
 }

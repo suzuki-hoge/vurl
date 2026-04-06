@@ -294,8 +294,10 @@ textarea {
 }
 
 .primary-button:disabled {
-  opacity: 0.7;
-  cursor: wait;
+  opacity: 1;
+  background: #7f8898;
+  color: #f3f6fb;
+  cursor: not-allowed;
 }
 
 .secondary-button {

@@ -100,5 +100,12 @@ export type SendResponse = {
   body: string
   body_base64?: string
   retried_auth: boolean
+  notifications: ResponseNotification[]
   current_log_file: string
+}
+
+export type ResponseNotification = {
+  code: "authenticated" | "timeout" | "generic"
+  kind: "info" | "error"
+  message: string
 }

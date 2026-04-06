@@ -1,10 +1,14 @@
 use anyhow::{Context, Result};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::Method;
+use std::time::Duration;
 
 use crate::{
     domain::{
-        api::{SendRequest, SendResponse},
+        api::{
+            ResponseNotification, ResponseNotificationCode, ResponseNotificationKind, SendRequest,
+            SendResponse,
+        },
         auth::AuthEnvironment,
     },
     runtime::store::RuntimeStore,
@@ -15,8 +19,21 @@ use crate::{
     },
 };
 
+pub const REQUEST_TIMEOUT_MS: u64 = 3_000;
+
 pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Result<SendResponse> {
     let mut env_state = store.env_state(&payload.project, &payload.environment)?;
+    let auth_environment = store
+        .project(&payload.project)?
+        .auth
+        .environments
+        .get(&payload.environment)
+        .with_context(|| {
+            format!(
+                "auth environment not found: {}/{}",
+                payload.project, payload.environment
+            )
+        })?;
     let auth = resolve_auth_credentials(
         store,
         &payload.project,
@@ -25,6 +42,7 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
         payload.auth_preset_name.as_deref(),
         &payload.auth_credentials,
     )?;
+    let mut http_authenticated = false;
 
     if payload.auth_enabled
         && should_authenticate_before_request(
@@ -36,6 +54,7 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
     {
         let updates = authenticate(store, &payload.project, &payload.environment, &auth).await?;
         env_state = store.update_env_variables(&payload.project, &payload.environment, &updates)?;
+        http_authenticated = matches!(auth_environment, AuthEnvironment::Http { .. });
     }
 
     let mut attempt = 0;
@@ -60,7 +79,9 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
             .context("base_url constant not found")?;
         let full_url = build_url(&base_url, &url_path, &query);
 
-        let client = reqwest::Client::builder().build()?;
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_millis(REQUEST_TIMEOUT_MS))
+            .build()?;
         let mut req = client.request(method.clone(), &full_url);
         for header in &headers {
             req = req.header(&header.key, &header.value);
@@ -90,12 +111,24 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
             env_state =
                 store.update_env_variables(&payload.project, &payload.environment, &updates)?;
             retried_auth = true;
+            if matches!(auth_environment, AuthEnvironment::Http { .. }) {
+                http_authenticated = true;
+            }
             attempt += 1;
             continue;
         }
 
         let log_file =
             append_request_log(store, &payload.project, &resolver, &curl, &response_text)?;
+        let notifications = if http_authenticated {
+            vec![ResponseNotification {
+                code: ResponseNotificationCode::Authenticated,
+                kind: ResponseNotificationKind::Info,
+                message: "自動認証を実行しました".to_string(),
+            }]
+        } else {
+            Vec::new()
+        };
         return Ok(SendResponse {
             status: status.as_u16(),
             headers: headers_out,
@@ -103,6 +136,7 @@ pub async fn execute_request(store: &RuntimeStore, payload: SendRequest) -> Resu
             body: response_text,
             body_base64: response_body_base64,
             retried_auth,
+            notifications,
             current_log_file: log_file.display().to_string(),
         });
     }

@@ -53,6 +53,8 @@ pub struct SendResponse {
     pub body: String,
     pub body_base64: Option<String>,
     pub retried_auth: bool,
+    #[serde(default)]
+    pub notifications: Vec<ResponseNotification>,
     pub current_log_file: String,
 }
 
@@ -60,6 +62,28 @@ pub struct SendResponse {
 pub struct HeaderEntry {
     pub key: String,
     pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResponseNotification {
+    pub code: ResponseNotificationCode,
+    pub kind: ResponseNotificationKind,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseNotificationCode {
+    Authenticated,
+    Timeout,
+    Generic,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResponseNotificationKind {
+    Info,
+    Error,
 }
 
 #[derive(Debug, Clone, Deserialize)]
