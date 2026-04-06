@@ -54,6 +54,9 @@ const emptyDraft: DraftState = {
 export function App() {
   const [projects, setProjects] = useState<string[]>([])
   const [routeProject, setRouteProject] = useState(getProjectFromLocation())
+  const [routeRequestPath, setRouteRequestPath] = useState(
+    getRequestPathFromLocation()
+  )
   const [project, setProject] = useState("")
   const [environmentSummaries, setEnvironmentSummaries] = useState<
     EnvironmentSummary[]
@@ -92,6 +95,7 @@ export function App() {
 
     const onPopState = () => {
       setRouteProject(getProjectFromLocation())
+      setRouteRequestPath(getRequestPathFromLocation())
     }
 
     window.addEventListener("popstate", onPopState)
@@ -104,6 +108,18 @@ export function App() {
     }
     void loadProjectData(project)
   }, [project])
+
+  useEffect(() => {
+    if (!project || !routeRequestPath) {
+      return
+    }
+
+    if (!hasRequestPath(tree, routeRequestPath)) {
+      return
+    }
+
+    void openDefinition(routeRequestPath, { syncUrl: false })
+  }, [project, routeRequestPath, tree])
 
   useEffect(() => {
     if (!projects.length) {
@@ -123,8 +139,9 @@ export function App() {
       return
     }
 
-    document.title = routeProject ? `vurl - ${routeProject}` : "vurl"
-  }, [routeProject])
+    document.title =
+      draft.name || (routeProject ? `vurl - ${routeProject}` : "vurl")
+  }, [draft.name, routeProject])
 
   useEffect(() => {
     const summary = environmentSummaries.find(
@@ -199,7 +216,12 @@ export function App() {
     }
   }
 
-  async function openDefinition(path: string) {
+  async function openDefinition(
+    path: string,
+    options?: {
+      syncUrl?: boolean
+    }
+  ) {
     if (!project) {
       return
     }
@@ -222,6 +244,10 @@ export function App() {
       setRequestTab("body")
       setResponseTab("body")
       setResponse(null)
+      if (options?.syncUrl !== false) {
+        updateRequestPathInLocation(project, path)
+        setRouteRequestPath(path)
+      }
     } catch (cause) {
       setError(toErrorMessage(cause))
     }
@@ -352,6 +378,7 @@ export function App() {
               key={`${node.type}:${node.path}`}
               node={node}
               onOpen={openDefinition}
+              project={project}
               expandedDirectories={expandedDirectories}
               onToggleDirectory={(path) =>
                 setExpandedDirectories((current) => ({
@@ -566,7 +593,11 @@ export function App() {
                   </option>
                 ))}
               </select>
-              <button className="primary-button request-send" disabled={sending} type="submit">
+              <button
+                className="primary-button request-send"
+                disabled={sending}
+                type="submit"
+              >
                 {sending ? "Sending..." : "Send"}
               </button>
             </div>
@@ -577,7 +608,9 @@ export function App() {
           <div className="panel-layout">
             <div className="panel-scroll">
               <div className="tab-bar response-tab-bar">
-                <div className={`status-pill ${statusToneClass(response?.status)}`}>
+                <div
+                  className={`status-pill ${statusToneClass(response?.status)}`}
+                >
                   {response?.status ?? "-"}
                 </div>
                 <TabButton
@@ -636,6 +669,7 @@ export function App() {
 function TreeNodeView(props: {
   node: RequestTreeNode
   onOpen: (path: string) => void | Promise<void>
+  project: string
   expandedDirectories: Record<string, boolean>
   onToggleDirectory: (path: string) => void
   forceExpanded: boolean
@@ -643,6 +677,7 @@ function TreeNodeView(props: {
   const {
     node,
     onOpen,
+    project,
     expandedDirectories,
     onToggleDirectory,
     forceExpanded
@@ -672,6 +707,7 @@ function TreeNodeView(props: {
                 key={`${child.type}:${child.path}`}
                 node={child}
                 onOpen={onOpen}
+                project={project}
                 expandedDirectories={expandedDirectories}
                 onToggleDirectory={onToggleDirectory}
                 forceExpanded={forceExpanded}
@@ -683,17 +719,33 @@ function TreeNodeView(props: {
     )
   }
 
+  const href = buildRequestUrl(project, node.path)
+
   return (
-    <button
+    <a
       className={`tree-request method-${node.method.toLowerCase()}`}
-      onClick={() => void onOpen(node.path)}
-      type="button"
+      href={href}
+      onClick={(event) => {
+        if (
+          event.defaultPrevented ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey ||
+          event.button !== 0
+        ) {
+          return
+        }
+
+        event.preventDefault()
+        void onOpen(node.path)
+      }}
     >
       <span className={`method-tag method-${node.method.toLowerCase()}`}>
         {node.method}
       </span>
       <span>{node.title}</span>
-    </button>
+    </a>
   )
 }
 
@@ -877,11 +929,25 @@ function statusToneClass(status?: number): string {
 }
 
 function highlightJson(text: string): Array<{
-  type: "key" | "string" | "number" | "boolean" | "null" | "punctuation" | "plain"
+  type:
+    | "key"
+    | "string"
+    | "number"
+    | "boolean"
+    | "null"
+    | "punctuation"
+    | "plain"
   value: string
 }> {
   const tokens: Array<{
-    type: "key" | "string" | "number" | "boolean" | "null" | "punctuation" | "plain"
+    type:
+      | "key"
+      | "string"
+      | "number"
+      | "boolean"
+      | "null"
+      | "punctuation"
+      | "plain"
     value: string
   }> = []
 
@@ -942,12 +1008,48 @@ function getProjectFromLocation(): string | null {
   return project ? decodeURIComponent(project) : null
 }
 
+function getRequestPathFromLocation(): string | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  const path = new URLSearchParams(window.location.search).get("path")
+  return path || null
+}
+
 function openProject(project: string) {
   if (typeof window === "undefined") {
     return
   }
 
   window.location.assign(`/${encodeURIComponent(project)}`)
+}
+
+function buildRequestUrl(project: string, path: string): string {
+  return `/${encodeURIComponent(project)}?path=${encodeURIComponent(path)}`
+}
+
+function updateRequestPathInLocation(project: string, path: string) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  window.history.pushState({}, "", buildRequestUrl(project, path))
+}
+
+function hasRequestPath(nodes: RequestTreeNode[], targetPath: string): boolean {
+  for (const node of nodes) {
+    if (node.type === "request" && node.path === targetPath) {
+      return true
+    }
+    if (
+      node.type === "directory" &&
+      hasRequestPath(node.children, targetPath)
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function toErrorMessage(cause: unknown): string {

@@ -4,7 +4,7 @@ import type { RequestTreeNode } from "../types/api"
 import { filterNodes } from "./tree"
 
 describe("filterNodes", () => {
-  test("filters request nodes by title and keeps parent directory", () => {
+  test("filters request nodes by name or path and keeps parent directory", () => {
     const nodes: RequestTreeNode[] = [
       {
         type: "directory",
@@ -22,7 +22,7 @@ describe("filterNodes", () => {
       }
     ]
 
-    const filtered = filterNodes(nodes, "get user")
+    const filtered = filterNodes(nodes, "get-user")
     expect(filtered).toHaveLength(1)
     expect(filtered[0]?.type).toBe("directory")
   })
