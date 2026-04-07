@@ -137,7 +137,7 @@ mod tests {
 
     use super::{append_raw_log, append_request_log};
     use crate::{
-        config::paths::AppPaths, domain::api::AuthCredentials,
+        config::paths::AppPaths, domain::http::AuthCredentials,
         models::runtime::RuntimeEnvironmentState, runtime::store::RuntimeStore,
         services::resolver::ResolveContext,
     };

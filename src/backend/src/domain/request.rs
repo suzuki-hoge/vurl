@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::api::KeyValueEntry;
+use crate::domain::http::KeyValueEntry;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestDefinition {

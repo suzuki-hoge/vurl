@@ -1,32 +1,23 @@
 use actix_web::{HttpResponse, Responder, get, post, web};
 use anyhow::Error as AnyhowError;
-use serde::Deserialize;
 use serde_json::json;
 
 use crate::{
-    domain::api::{
-        AuthPresetSummary, DefinitionResponse, EnvironmentSummary, LogFileResponse, ProjectSummary,
-        ResponseNotification, ResponseNotificationCode, ResponseNotificationKind, RuntimeInfo,
-        SendRequest, SendResponse, TreeResponse,
-    },
     domain::auth::AuthEnvironment,
+    handlers::api_types::{
+        AuthPresetSummary, DefinitionQuery, DefinitionResponse, EnvironmentSummary,
+        LogFileResponse, ProjectQuery, ProjectSummary, RuntimeInfo, SendRequest, SendResponse,
+        TreeResponse,
+    },
     services::{
         logging::create_manual_log_file,
-        request_execution::{REQUEST_TIMEOUT_MS, execute_request},
+        request_execution::{
+            ExecuteRequestResult, REQUEST_TIMEOUT_MS, ResponseNotification,
+            ResponseNotificationCode, ResponseNotificationKind, execute_request,
+        },
     },
     state::app_state::AppState,
 };
-
-#[derive(Debug, Deserialize)]
-pub struct ProjectQuery {
-    pub project: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DefinitionQuery {
-    pub project: String,
-    pub path: String,
-}
 
 #[get("/api/runtime")]
 pub async fn runtime(state: web::Data<AppState>) -> actix_web::Result<impl Responder> {
@@ -132,8 +123,8 @@ pub async fn send(
     state: web::Data<AppState>,
     payload: web::Json<SendRequest>,
 ) -> actix_web::Result<impl Responder> {
-    match execute_request(&state.store, payload.into_inner()).await {
-        Ok(response) => Ok(HttpResponse::Ok().json(response)),
+    match execute_request(&state.store, payload.into_inner().into()).await {
+        Ok(response) => Ok(HttpResponse::Ok().json(SendResponse::from(response))),
         Err(error) if is_timeout_error(&error) => {
             Ok(HttpResponse::InternalServerError().json(build_timeout_response()))
         }
@@ -172,7 +163,7 @@ fn build_timeout_response() -> SendResponse {
     })
     .to_string();
 
-    SendResponse {
+    SendResponse::from(ExecuteRequestResult {
         status: 500,
         headers: Vec::new(),
         content_type: Some("application/json".to_string()),
@@ -187,5 +178,5 @@ fn build_timeout_response() -> SendResponse {
             ),
         }],
         current_log_file: String::new(),
-    }
+    })
 }

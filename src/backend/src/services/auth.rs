@@ -1,18 +1,19 @@
 use std::collections::HashMap;
-use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use reqwest::Method;
 use serde_json::Value;
 
 use crate::{
     domain::{
-        api::{AuthCredentials, AuthInputMode, HeaderEntry, RequestBodyDraft},
         auth::{AuthBody, AuthCredentialPreset, AuthEnvironment, ResponseInjectRule},
+        http::{AuthCredentials, AuthInputMode, RequestBodyDraft},
     },
     runtime::store::RuntimeStore,
     services::{
-        logging::append_raw_log, request_execution::REQUEST_TIMEOUT_MS, resolver::ResolveContext,
+        http::{PreparedRequest, build_curl, send},
+        logging::append_raw_log,
+        request_execution::REQUEST_TIMEOUT_MS,
+        resolver::ResolveContext,
     },
 };
 
@@ -81,38 +82,17 @@ pub async fn authenticate(
             bail!("authentication mapping not found")
         }
         AuthEnvironment::Http {
-            request,
+            request: _,
             response: auth_response,
             ..
         } => {
-            let runtime = store.env_state(project, environment)?;
-            let resolver = ResolveContext {
-                environment: runtime,
-                auth: credentials.clone(),
-            };
-
-            let method = Method::from_bytes(request.method.as_bytes())
-                .with_context(|| format!("invalid auth method: {}", request.method))?;
-            let url = resolver.resolve_string(&request.url)?;
-            let headers = resolver.resolve_entries(&request.headers)?;
-            let body = resolve_auth_body(&resolver, &request.body)?;
-            let curl = build_auth_curl(&request.method, &url, &headers, &body);
-
-            let client = reqwest::Client::builder()
-                .timeout(Duration::from_millis(REQUEST_TIMEOUT_MS))
-                .build()?;
-            let mut req = client.request(method, url);
-            for header in headers {
-                req = req.header(&header.key, &header.value);
-            }
-            req = apply_request_body(req, &body)?;
-
-            let response = req.send().await?;
-            let status = response.status();
-            let text = response.text().await?;
+            let prepared = prepare_http_auth_request(store, project, environment, credentials)?;
+            let curl = build_curl(&prepared);
+            let response = send(&prepared, REQUEST_TIMEOUT_MS).await?;
+            let text = response.body_text;
             let _ = append_raw_log(store, project, &curl, &text);
-            if !status.is_success() {
-                bail!("auth request failed: {status} {text}");
+            if !(200..300).contains(&response.status) {
+                bail!("auth request failed: {} {}", response.status, text);
             }
 
             let json: Value = serde_json::from_str(&text).unwrap_or(Value::String(text));
@@ -127,39 +107,34 @@ pub async fn authenticate(
     }
 }
 
-fn build_auth_curl(
-    method: &str,
-    url: &str,
-    headers: &[crate::domain::api::KeyValueEntry],
-    body: &RequestBodyDraft,
-) -> String {
-    let mut lines = vec![format!("curl -X {method} '{url}'")];
-    for header in headers {
-        lines.push(format!(
-            "  -H '{}: {}'",
-            escape_single(&header.key),
-            escape_single(&header.value)
-        ));
-    }
+fn prepare_http_auth_request(
+    store: &RuntimeStore,
+    project: &str,
+    environment: &str,
+    credentials: &AuthCredentials,
+) -> Result<PreparedRequest> {
+    let auth_definitions = &store.project(project)?.auth;
+    let auth = auth_definitions
+        .environments
+        .get(environment)
+        .with_context(|| format!("auth environment not found: {project}/{environment}"))?;
 
-    match body {
-        RequestBodyDraft::Json { text } => {
-            if !text.trim().is_empty() {
-                lines.push(format!("  --data-raw '{}'", escape_single(text)));
-            }
-        }
-        RequestBodyDraft::Form { form } => {
-            for entry in form {
-                lines.push(format!(
-                    "  -d '{}={}'",
-                    escape_single(&entry.key),
-                    escape_single(&entry.value)
-                ));
-            }
-        }
-    }
+    let AuthEnvironment::Http { request, .. } = auth else {
+        bail!("http auth is not configured")
+    };
 
-    lines.join(" \\\n")
+    let runtime = store.env_state(project, environment)?;
+    let resolver = ResolveContext {
+        environment: runtime,
+        auth: credentials.clone(),
+    };
+
+    Ok(PreparedRequest {
+        method: request.method.clone(),
+        url: resolver.resolve_string(&request.url)?,
+        headers: resolver.resolve_entries(&request.headers)?,
+        body: resolve_auth_body(&resolver, &request.body)?,
+    })
 }
 
 fn find_preset<'a>(
@@ -181,30 +156,6 @@ fn resolve_auth_body(resolver: &ResolveContext, body: &AuthBody) -> Result<Reque
             form: resolver.resolve_entries(form)?,
         }),
     }
-}
-
-fn apply_request_body(
-    req: reqwest::RequestBuilder,
-    body: &RequestBodyDraft,
-) -> Result<reqwest::RequestBuilder> {
-    Ok(match body {
-        RequestBodyDraft::Json { text } => {
-            if text.trim().is_empty() {
-                req
-            } else if let Ok(json) = serde_json::from_str::<Value>(text) {
-                req.json(&json)
-            } else {
-                req.body(text.clone())
-            }
-        }
-        RequestBodyDraft::Form { form } => {
-            let pairs: Vec<(String, String)> = form
-                .iter()
-                .map(|entry| (entry.key.clone(), entry.value.clone()))
-                .collect();
-            req.form(&pairs)
-        }
-    })
 }
 
 fn extract_json_path(json: &Value, rule: &ResponseInjectRule) -> Result<Option<String>> {
@@ -232,18 +183,4 @@ fn extract_json_path(json: &Value, rule: &ResponseInjectRule) -> Result<Option<S
     };
 
     Ok(result)
-}
-
-fn escape_single(value: &str) -> String {
-    value.replace('\'', "'\\''")
-}
-
-pub fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HeaderEntry> {
-    headers
-        .iter()
-        .map(|(key, value)| HeaderEntry {
-            key: key.to_string(),
-            value: value.to_str().unwrap_or_default().to_string(),
-        })
-        .collect()
 }

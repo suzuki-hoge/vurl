@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::{Result, bail};
 
 use crate::{
-    domain::api::{AuthCredentials, KeyValueEntry, RequestBodyDraft},
+    domain::http::{AuthCredentials, KeyValueEntry, RequestBodyDraft},
     models::runtime::RuntimeEnvironmentState,
 };
 
@@ -114,7 +114,7 @@ mod tests {
 
     use super::ResolveContext;
     use crate::{
-        domain::api::{AuthCredentials, KeyValueEntry, RequestBodyDraft},
+        domain::http::{AuthCredentials, KeyValueEntry, RequestBodyDraft},
         models::runtime::RuntimeEnvironmentState,
     };
 
