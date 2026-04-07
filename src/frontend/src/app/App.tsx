@@ -1,71 +1,53 @@
 import { useEffect, useMemo, useState } from "react"
-import {
-  FiCheckSquare,
-  FiPlus,
-  FiSearch,
-  FiSquare,
-  FiTrash2
-} from "react-icons/fi"
 import toast from "react-hot-toast"
 
 import { apiClient } from "../api/client"
+import { HeaderEditor } from "../components/request/HeaderEditor"
+import { JsonHighlightedText } from "../components/request/JsonHighlightedText"
+import { KeyValueEditor } from "../components/request/KeyValueEditor"
+import { TreeNodeView } from "../components/tree/TreeNodeView"
+import { Button } from "../components/ui/Button"
+import { Icon } from "../components/ui/Icon"
+import { Input } from "../components/ui/Input"
+import { Select } from "../components/ui/Select"
+import { TabButton } from "../components/ui/TabButton"
+import { Textarea } from "../components/ui/Textarea"
+import {
+  buildEffectiveHeaders,
+  definitionToDraft,
+  emptyDraft,
+  persistHeaders,
+  sanitizeHeaderPairs,
+  sanitizePairs,
+  type DraftState
+} from "../features/request/model"
+import {
+  formatResponseBody,
+  getResponseContentType,
+  isImageContentType,
+  isJsonContentType,
+  statusToneClass
+} from "../features/response/model"
+import {
+  getProjectFromLocation,
+  getRequestPathFromLocation,
+  hasRequestPath,
+  openProject,
+  updateRequestPathInLocation
+} from "../lib/location"
 import { filterNodes } from "../lib/tree"
 import type {
   AuthPresetSummary,
   DefinitionResponse,
   EnvironmentSummary,
   ResponseNotification,
-  RequestDefinition,
-  RequestKeyValue,
   RequestTreeNode,
   SendResponse
 } from "../types/api"
 import "./App.scss"
 
-type DraftHeaderState = "editable" | "locked" | "off"
-
-type DraftHeader = {
-  key: string
-  value: string
-  state: DraftHeaderState
-}
-
-type DraftState = {
-  project: string
-  environment: string
-  definitionPath: string
-  name: string
-  method: string
-  urlPath: string
-  auth: boolean
-  query: RequestKeyValue[]
-  headers: DraftHeader[]
-  body:
-    | {
-        type: "json"
-        text: string
-      }
-    | {
-        type: "form"
-        form: RequestKeyValue[]
-      }
-}
-
 type RequestTab = "query" | "headers" | "body"
 type ResponseTab = "headers" | "body"
-
-const emptyDraft: DraftState = {
-  project: "",
-  environment: "",
-  definitionPath: "",
-  name: "",
-  method: "GET",
-  urlPath: "",
-  auth: false,
-  query: [],
-  headers: [],
-  body: { type: "json", text: "" }
-}
 
 export function App() {
   const [projects, setProjects] = useState<string[]>([])
@@ -376,14 +358,14 @@ export function App() {
           {error ? <div className="error-banner">{error}</div> : null}
           <div className="project-list">
             {projects.map((item) => (
-              <button
+              <Button
                 key={item}
                 className="project-link"
                 onClick={() => openProject(item)}
                 type="button"
               >
                 {item}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -399,14 +381,14 @@ export function App() {
           <div className="error-banner">project not found: {routeProject}</div>
           <div className="project-list">
             {projects.map((item) => (
-              <button
+              <Button
                 key={item}
                 className="project-link"
                 onClick={() => openProject(item)}
                 type="button"
               >
                 {item}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -420,9 +402,9 @@ export function App() {
         <div className="sidebar-header">
           <label className="search-field">
             <span className="search-icon" aria-hidden="true">
-              <FiSearch />
+              <Icon name="search" />
             </span>
-            <input
+            <Input
               value={filterText}
               onChange={(event) => setFilterText(event.target.value)}
               placeholder="path or name"
@@ -472,7 +454,7 @@ export function App() {
                 <div className="request-name">{draft.name || "-"}</div>
               </div>
 
-              <input
+              <Input
                 className="request-path-input"
                 value={draft.urlPath}
                 onChange={(event) =>
@@ -486,7 +468,7 @@ export function App() {
 
               {draft.auth ? (
                 <div className="auth-panel">
-                  <button
+                  <Button
                     className={`auth-toggle${authExpanded ? " is-expanded" : ""}`}
                     onClick={() => setAuthExpanded((current) => !current)}
                     type="button"
@@ -495,7 +477,7 @@ export function App() {
                     <span className="tree-dir-caret" aria-hidden="true">
                       {authExpanded ? "▾" : "▸"}
                     </span>
-                  </button>
+                  </Button>
 
                   <div
                     className={`auth-collapse${authExpanded ? " is-expanded" : ""}`}
@@ -503,7 +485,7 @@ export function App() {
                     <div className="auth-collapse-inner">
                       <div className="auth-mode-row">
                         <label className="radio-pill">
-                          <input
+                          <Input
                             checked={authInputMode === "preset"}
                             disabled={authPresets.length === 0}
                             name="auth-mode"
@@ -513,7 +495,7 @@ export function App() {
                           <span>preset</span>
                         </label>
                         <label className="radio-pill">
-                          <input
+                          <Input
                             checked={authInputMode === "manual"}
                             name="auth-mode"
                             onChange={() => setAuthInputMode("manual")}
@@ -525,7 +507,7 @@ export function App() {
 
                       <div className="auth-inputs">
                         {authInputMode === "preset" ? (
-                          <select
+                          <Select
                             className="request-inline-select"
                             value={selectedAuthPreset}
                             onChange={(event) =>
@@ -537,10 +519,10 @@ export function App() {
                                 {preset.name}
                               </option>
                             ))}
-                          </select>
+                          </Select>
                         ) : (
                           <>
-                            <input
+                            <Input
                               className="request-inline-input"
                               onChange={(event) => {
                                 setAuthId(event.target.value)
@@ -548,7 +530,7 @@ export function App() {
                               placeholder="ID"
                               value={authId}
                             />
-                            <input
+                            <Input
                               className="request-inline-input"
                               onChange={(event) => {
                                 setAuthPassword(event.target.value)
@@ -619,7 +601,7 @@ export function App() {
                 {requestTab === "body" ? (
                   draft.body.type === "json" ? (
                     <div className="card fill-card">
-                      <textarea
+                      <Textarea
                         className="body-textarea fill-area"
                         value={draft.body.text}
                         onChange={(event) =>
@@ -646,7 +628,7 @@ export function App() {
             </div>
 
             <div className="request-footer">
-              <select
+              <Select
                 className="request-environment-select"
                 value={environment}
                 onChange={(event) => {
@@ -663,14 +645,15 @@ export function App() {
                     {item}
                   </option>
                 ))}
-              </select>
-              <button
+              </Select>
+              <Button
                 className="primary-button request-send"
                 disabled={sending}
                 type="submit"
+                variant="primary"
               >
                 Send
-              </button>
+              </Button>
             </div>
           </form>
         </section>
@@ -735,531 +718,6 @@ export function App() {
       </main>
     </div>
   )
-}
-
-function TreeNodeView(props: {
-  node: RequestTreeNode
-  onOpen: (path: string) => void | Promise<void>
-  project: string
-  expandedDirectories: Record<string, boolean>
-  onToggleDirectory: (path: string) => void
-  forceExpanded: boolean
-}) {
-  const {
-    node,
-    onOpen,
-    project,
-    expandedDirectories,
-    onToggleDirectory,
-    forceExpanded
-  } = props
-
-  if (node.type === "directory") {
-    const isExpanded = forceExpanded || expandedDirectories[node.path] === true
-
-    return (
-      <div className="tree-node">
-        <button
-          className={`tree-dir-button${isExpanded ? " is-expanded" : ""}`}
-          onClick={() => onToggleDirectory(node.path)}
-          type="button"
-        >
-          <span className="tree-dir-caret" aria-hidden="true">
-            {isExpanded ? "▾" : "▸"}
-          </span>
-          <span className="tree-dir">{node.name}</span>
-        </button>
-        <div
-          className={`tree-children-wrap${isExpanded ? " is-expanded" : ""}`}
-        >
-          <div className="tree-children">
-            {node.children.map((child) => (
-              <TreeNodeView
-                key={`${child.type}:${child.path}`}
-                node={child}
-                onOpen={onOpen}
-                project={project}
-                expandedDirectories={expandedDirectories}
-                onToggleDirectory={onToggleDirectory}
-                forceExpanded={forceExpanded}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const href = buildRequestUrl(project, node.path)
-
-  return (
-    <a
-      className={`tree-request method-${node.method.toLowerCase()}`}
-      href={href}
-      onClick={(event) => {
-        if (
-          event.defaultPrevented ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey ||
-          event.button !== 0
-        ) {
-          return
-        }
-
-        event.preventDefault()
-        void onOpen(node.path)
-      }}
-    >
-      <span className={`method-tag method-${node.method.toLowerCase()}`}>
-        {node.method}
-      </span>
-      <span>{node.title}</span>
-    </a>
-  )
-}
-
-function KeyValueEditor(props: {
-  items: RequestKeyValue[]
-  onChange: (items: RequestKeyValue[]) => void
-}) {
-  const { items, onChange } = props
-
-  return (
-    <div className="card fill-card">
-      <div className="kv-list">
-        {items.map((item, index) => (
-          <div className="kv-row" key={index}>
-            <input
-              placeholder="key"
-              value={item.key}
-              onChange={(event) =>
-                onChange(
-                  items.map((current, currentIndex) =>
-                    currentIndex === index
-                      ? { ...current, key: event.target.value }
-                      : current
-                  )
-                )
-              }
-            />
-            <input
-              placeholder="value"
-              value={item.value}
-              onChange={(event) =>
-                onChange(
-                  items.map((current, currentIndex) =>
-                    currentIndex === index
-                      ? { ...current, value: event.target.value }
-                      : current
-                  )
-                )
-              }
-            />
-            <button
-              aria-label="Remove row"
-              className="icon-button danger"
-              onClick={() =>
-                onChange(
-                  items.filter((_, currentIndex) => currentIndex !== index)
-                )
-              }
-              type="button"
-            >
-              <FiTrash2 />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div className="kv-footer">
-        <button
-          aria-label="Add row"
-          className="icon-button"
-          onClick={() => onChange([...items, { key: "", value: "" }])}
-          type="button"
-        >
-          <FiPlus />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function HeaderEditor(props: {
-  items: DraftHeader[]
-  onChange: (items: DraftHeader[]) => void
-  onAdd: () => void
-}) {
-  const { items, onChange, onAdd } = props
-
-  return (
-    <div className="card fill-card">
-      <div className="kv-list">
-        {items.map((item, index) => {
-          const isLocked = item.state === "locked"
-          const isToggleable = item.state !== "locked"
-          const isEnabled = item.state !== "off"
-
-          return (
-            <div
-              className={`kv-row kv-row-header${item.state === "off" ? " is-off" : ""}`}
-              key={index}
-            >
-              <input
-                placeholder="key"
-                readOnly={isLocked}
-                value={item.key}
-                onChange={(event) =>
-                  onChange(
-                    items.map((current, currentIndex) =>
-                      currentIndex === index
-                        ? { ...current, key: event.target.value }
-                        : current
-                    )
-                  )
-                }
-              />
-              <input
-                placeholder="value"
-                readOnly={isLocked}
-                value={item.value}
-                onChange={(event) =>
-                  onChange(
-                    items.map((current, currentIndex) =>
-                      currentIndex === index
-                        ? { ...current, value: event.target.value }
-                        : current
-                    )
-                  )
-                }
-              />
-              {isToggleable ? (
-                <button
-                  aria-label={isEnabled ? "Disable header" : "Enable header"}
-                  className={`icon-button header-toggle${isEnabled ? " is-enabled" : ""}`}
-                  onClick={() =>
-                    onChange(
-                      items.map((current, currentIndex) =>
-                        currentIndex === index
-                          ? {
-                              ...current,
-                              state:
-                                current.state === "off" ? "editable" : "off"
-                            }
-                          : current
-                      )
-                    )
-                  }
-                  type="button"
-                >
-                  {isEnabled ? <FiCheckSquare /> : <FiSquare />}
-                </button>
-              ) : (
-                <div className="header-state">fixed</div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="kv-footer">
-        <button
-          aria-label="Add row"
-          className="icon-button"
-          onClick={onAdd}
-          type="button"
-        >
-          <FiPlus />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function TabButton(props: {
-  active: boolean
-  label: string
-  onClick: () => void
-}) {
-  const { active, label, onClick } = props
-
-  return (
-    <button
-      className={`tab-button${active ? " is-active" : ""}`}
-      onClick={onClick}
-      type="button"
-    >
-      {label}
-    </button>
-  )
-}
-
-function JsonHighlightedText(props: { text: string }) {
-  const { text } = props
-  const tokens = highlightJson(text)
-
-  return (
-    <>
-      {tokens.map((token, index) => (
-        <span key={index} className={`json-token json-token-${token.type}`}>
-          {token.value}
-        </span>
-      ))}
-    </>
-  )
-}
-
-function definitionToDraft(
-  project: string,
-  environment: string,
-  path: string,
-  definition: RequestDefinition
-): DraftState {
-  return {
-    project,
-    environment,
-    definitionPath: path,
-    name: definition.name,
-    method: definition.method,
-    urlPath: definition.path,
-    auth: definition.auth,
-    query: definition.request.query,
-    headers: definition.request.headers.map((header) => ({
-      ...header,
-      state: "editable"
-    })),
-    body:
-      definition.request.body.type === "json"
-        ? { type: "json", text: definition.request.body.text }
-        : { type: "form", form: definition.request.body.form }
-  }
-}
-
-function getResponseContentType(response: SendResponse | null): string {
-  if (!response) {
-    return ""
-  }
-
-  if (response.content_type) {
-    return response.content_type
-  }
-
-  return (
-    response.headers.find(
-      (header) => header.key.toLowerCase() === "content-type"
-    )?.value ?? ""
-  )
-}
-
-function formatResponseBody(response: SendResponse | null): string {
-  if (!response) {
-    return ""
-  }
-
-  const contentType = getResponseContentType(response)
-  if (!isJsonContentType(contentType)) {
-    return response.body
-  }
-
-  try {
-    return JSON.stringify(JSON.parse(response.body), null, 2)
-  } catch {
-    return response.body
-  }
-}
-
-function isJsonContentType(contentType: string): boolean {
-  const mimeType = contentType.split(";")[0]?.trim().toLowerCase() ?? ""
-  return mimeType === "application/json" || mimeType.endsWith("+json")
-}
-
-function isImageContentType(contentType: string): boolean {
-  const mimeType = contentType.split(";")[0]?.trim().toLowerCase() ?? ""
-  return mimeType.startsWith("image/")
-}
-
-function statusToneClass(status?: number): string {
-  if (!status) {
-    return ""
-  }
-  if (status >= 200 && status < 400) {
-    return "is-success"
-  }
-  if (status >= 400 && status < 600) {
-    return "is-error"
-  }
-  return ""
-}
-
-function highlightJson(text: string): Array<{
-  type:
-    | "key"
-    | "string"
-    | "number"
-    | "boolean"
-    | "null"
-    | "punctuation"
-    | "plain"
-  value: string
-}> {
-  const tokens: Array<{
-    type:
-      | "key"
-      | "string"
-      | "number"
-      | "boolean"
-      | "null"
-      | "punctuation"
-      | "plain"
-    value: string
-  }> = []
-
-  const pattern =
-    /("(?:\\.|[^"\\])*")(\s*:)?|\b-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\btrue\b|\bfalse\b|\bnull\b|[{}[\],:]/g
-
-  let lastIndex = 0
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index ?? 0
-    if (index > lastIndex) {
-      tokens.push({ type: "plain", value: text.slice(lastIndex, index) })
-    }
-
-    const value = match[0]
-    if (match[1]) {
-      tokens.push({
-        type: match[2] ? "key" : "string",
-        value: match[1]
-      })
-      if (match[2]) {
-        tokens.push({ type: "punctuation", value: match[2] })
-      }
-    } else if (value === "true" || value === "false") {
-      tokens.push({ type: "boolean", value })
-    } else if (value === "null") {
-      tokens.push({ type: "null", value })
-    } else if (/^[{}[\],:]$/.test(value)) {
-      tokens.push({ type: "punctuation", value })
-    } else {
-      tokens.push({ type: "number", value })
-    }
-
-    lastIndex = index + value.length
-  }
-
-  if (lastIndex < text.length) {
-    tokens.push({ type: "plain", value: text.slice(lastIndex) })
-  }
-
-  return tokens
-}
-
-function sanitizePairs(items: RequestKeyValue[]): RequestKeyValue[] {
-  return items.filter((item) => item.key.trim() !== "")
-}
-
-function sanitizeHeaderPairs(items: DraftHeader[]): RequestKeyValue[] {
-  return items
-    .filter((item) => item.state !== "off")
-    .filter((item) => item.key.trim() !== "")
-    .map((item) => ({ key: item.key, value: item.value }))
-}
-
-function buildEffectiveHeaders(draft: DraftState): DraftHeader[] {
-  if (!shouldInjectJsonContentType(draft)) {
-    return draft.headers
-  }
-
-  return [
-    { key: "Content-Type", value: "application/json", state: "locked" },
-    ...draft.headers
-  ]
-}
-
-function hasHeader(items: DraftHeader[], key: string): boolean {
-  const normalizedKey = key.trim().toLowerCase()
-  return items.some((item) => item.key.trim().toLowerCase() === normalizedKey)
-}
-
-function persistHeaders(
-  draft: DraftState,
-  items: DraftHeader[]
-): DraftHeader[] {
-  if (!shouldInjectJsonContentType(draft)) {
-    return items
-  }
-
-  return items.filter(
-    (item) =>
-      !(
-        item.state === "locked" &&
-        item.key.trim().toLowerCase() === "content-type" &&
-        item.value === "application/json"
-      )
-  )
-}
-
-function shouldInjectJsonContentType(draft: DraftState): boolean {
-  return draft.body.type === "json" && !hasHeader(draft.headers, "content-type")
-}
-
-function getProjectFromLocation(): string | null {
-  if (typeof window === "undefined") {
-    return null
-  }
-
-  const path = window.location.pathname.replace(/^\/+|\/+$/g, "")
-  if (!path) {
-    return null
-  }
-
-  const [project] = path.split("/")
-  return project ? decodeURIComponent(project) : null
-}
-
-function getRequestPathFromLocation(): string | null {
-  if (typeof window === "undefined") {
-    return null
-  }
-
-  const path = new URLSearchParams(window.location.search).get("path")
-  return path || null
-}
-
-function openProject(project: string) {
-  if (typeof window === "undefined") {
-    return
-  }
-
-  window.location.assign(`/${encodeURIComponent(project)}`)
-}
-
-function buildRequestUrl(project: string, path: string): string {
-  return `/${encodeURIComponent(project)}?path=${encodeURIComponent(path)}`
-}
-
-function updateRequestPathInLocation(project: string, path: string) {
-  if (typeof window === "undefined") {
-    return
-  }
-
-  window.history.pushState({}, "", buildRequestUrl(project, path))
-}
-
-function hasRequestPath(nodes: RequestTreeNode[], targetPath: string): boolean {
-  for (const node of nodes) {
-    if (node.type === "request" && node.path === targetPath) {
-      return true
-    }
-    if (
-      node.type === "directory" &&
-      hasRequestPath(node.children, targetPath)
-    ) {
-      return true
-    }
-  }
-  return false
 }
 
 function toErrorMessage(cause: unknown): string {
