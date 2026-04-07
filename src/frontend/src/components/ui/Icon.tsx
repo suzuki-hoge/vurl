@@ -1,4 +1,5 @@
 import {
+  FiChevronDown,
   FiCheckSquare,
   FiPlus,
   FiSearch,
@@ -7,6 +8,7 @@ import {
 } from "react-icons/fi"
 
 const icons = {
+  "chevron-down": FiChevronDown,
   "check-square": FiCheckSquare,
   plus: FiPlus,
   search: FiSearch,

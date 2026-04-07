@@ -21,7 +21,9 @@ export function Button(props: Props) {
   return (
     <button
       {...rest}
-      className={[variantClass, className].filter(Boolean).join(" ")}
+      className={["ui-button", variantClass, className]
+        .filter(Boolean)
+        .join(" ")}
       type={type}
     >
       {children}

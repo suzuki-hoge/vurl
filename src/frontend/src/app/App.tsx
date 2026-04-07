@@ -3,15 +3,13 @@ import toast from "react-hot-toast"
 
 import { apiClient } from "../api/client"
 import { HeaderEditor } from "../components/request/HeaderEditor"
-import { JsonHighlightedText } from "../components/request/JsonHighlightedText"
 import { KeyValueEditor } from "../components/request/KeyValueEditor"
 import { TreeNodeView } from "../components/tree/TreeNodeView"
 import { Button } from "../components/ui/Button"
-import { Icon } from "../components/ui/Icon"
 import { Input } from "../components/ui/Input"
+import { JsonCodeBlock } from "../components/ui/JsonCodeBlock"
 import { Select } from "../components/ui/Select"
-import { TabButton } from "../components/ui/TabButton"
-import { Textarea } from "../components/ui/Textarea"
+import { Tab, TabList } from "../components/ui/Tabs"
 import {
   buildEffectiveHeaders,
   definitionToDraft,
@@ -35,6 +33,7 @@ import {
   openProject,
   updateRequestPathInLocation
 } from "../lib/location"
+import { formatMethodLabel } from "../lib/http"
 import { filterNodes } from "../lib/tree"
 import type {
   AuthPresetSummary,
@@ -47,7 +46,7 @@ import type {
 import "./App.scss"
 
 type RequestTab = "query" | "headers" | "body"
-type ResponseTab = "headers" | "body"
+type ResponseTab = "code" | "headers" | "body"
 
 export function App() {
   const [projects, setProjects] = useState<string[]>([])
@@ -400,16 +399,13 @@ export function App() {
     <div className="app-shell">
       <aside className="app-sidebar">
         <div className="sidebar-header">
-          <label className="search-field">
-            <span className="search-icon" aria-hidden="true">
-              <Icon name="search" />
-            </span>
-            <Input
-              value={filterText}
-              onChange={(event) => setFilterText(event.target.value)}
-              placeholder="path or name"
-            />
-          </label>
+          <Input
+            icon="search"
+            value={filterText}
+            onChange={(event) => setFilterText(event.target.value)}
+            placeholder="path or name"
+            wrapperClassName="search-field"
+          />
         </div>
 
         <div className="tree-list">
@@ -449,7 +445,7 @@ export function App() {
                 <span
                   className={`method-tag request-method method-${draft.method.toLowerCase()}`}
                 >
-                  {draft.method || "-"}
+                  {draft.method ? formatMethodLabel(draft.method) : "-"}
                 </span>
                 <div className="request-name">{draft.name || "-"}</div>
               </div>
@@ -548,24 +544,27 @@ export function App() {
               ) : null}
             </div>
 
-            <div className="panel-scroll">
-              <div className="tab-bar">
-                <TabButton
+            <div className="panel-scroll panel-scroll-tabs">
+              <TabList>
+                <Tab
                   active={requestTab === "query"}
-                  label="Query"
                   onClick={() => setRequestTab("query")}
-                />
-                <TabButton
+                >
+                  Query
+                </Tab>
+                <Tab
                   active={requestTab === "headers"}
-                  label="Headers"
                   onClick={() => setRequestTab("headers")}
-                />
-                <TabButton
+                >
+                  Headers
+                </Tab>
+                <Tab
                   active={requestTab === "body"}
-                  label="Body"
                   onClick={() => setRequestTab("body")}
-                />
-              </div>
+                >
+                  Body
+                </Tab>
+              </TabList>
 
               <div className="tab-panel">
                 {requestTab === "query" ? (
@@ -600,18 +599,16 @@ export function App() {
 
                 {requestTab === "body" ? (
                   draft.body.type === "json" ? (
-                    <div className="card fill-card">
-                      <Textarea
-                        className="body-textarea fill-area"
-                        value={draft.body.text}
-                        onChange={(event) =>
-                          setDraft((current) => ({
-                            ...current,
-                            body: { type: "json", text: event.target.value }
-                          }))
-                        }
-                      />
-                    </div>
+                    <JsonCodeBlock
+                      editable
+                      text={draft.body.text}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          body: { type: "json", text: event.target.value }
+                        }))
+                      }
+                    />
                   ) : (
                     <KeyValueEditor
                       items={draft.body.form}
@@ -660,26 +657,39 @@ export function App() {
 
         <section className="app-panel app-response">
           <div className="panel-layout">
-            <div className="panel-scroll">
-              <div className="tab-bar response-tab-bar">
-                <div
-                  className={`status-pill ${statusToneClass(response?.status)}`}
+            <div className="panel-scroll panel-scroll-tabs">
+              <TabList>
+                <Tab
+                  active={responseTab === "code"}
+                  onClick={() => setResponseTab("code")}
                 >
-                  {response?.status ?? "-"}
-                </div>
-                <TabButton
+                  Code
+                </Tab>
+                <Tab
                   active={responseTab === "headers"}
-                  label="Headers"
                   onClick={() => setResponseTab("headers")}
-                />
-                <TabButton
+                >
+                  Headers
+                </Tab>
+                <Tab
                   active={responseTab === "body"}
-                  label="Body"
                   onClick={() => setResponseTab("body")}
-                />
-              </div>
+                >
+                  Body
+                </Tab>
+              </TabList>
 
               <div className="tab-panel">
+                {responseTab === "code" ? (
+                  <div className="card fill-card">
+                    <pre
+                      className={`response-block fill-area ${statusToneClass(response?.status)}`}
+                    >
+                      {response?.status ?? "-"}
+                    </pre>
+                  </div>
+                ) : null}
+
                 {responseTab === "headers" ? (
                   <div className="card fill-card">
                     <pre className="response-block fill-area">
@@ -701,9 +711,7 @@ export function App() {
                         />
                       </div>
                     ) : isJsonContentType(responseContentType) ? (
-                      <pre className="response-block response-json fill-area">
-                        <JsonHighlightedText text={formattedResponseBody} />
-                      </pre>
+                      <JsonCodeBlock text={formattedResponseBody} />
                     ) : (
                       <pre className="response-block fill-area">
                         {formattedResponseBody}

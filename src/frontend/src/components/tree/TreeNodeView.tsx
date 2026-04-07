@@ -1,3 +1,4 @@
+import { formatMethodLabel } from "../../lib/http"
 import type { RequestTreeNode } from "../../types/api"
 import { buildRequestUrl } from "../../lib/location"
 import { Button } from "../ui/Button"
@@ -78,7 +79,7 @@ export function TreeNodeView(props: {
       }}
     >
       <span className={`method-tag method-${node.method.toLowerCase()}`}>
-        {node.method}
+        {formatMethodLabel(node.method)}
       </span>
       <span>{node.title}</span>
     </a>
