@@ -16,6 +16,7 @@ use crate::{
             ResponseNotificationCode, ResponseNotificationKind, execute_request,
         },
     },
+    runtime::store::sorted_environments,
     state::app_state::AppState,
 };
 
@@ -55,12 +56,10 @@ pub async fn environments(
         .store
         .project(&query.project)
         .map_err(actix_web::error::ErrorBadRequest)?;
-    let mut names: Vec<_> = project.environments.keys().cloned().collect();
-    names.sort();
-    let items = names
+    let items = sorted_environments(&project.environments)
         .into_iter()
-        .map(|name| {
-            let auth_presets = match project.auth.environments.get(&name) {
+        .map(|(name, _)| {
+            let auth_presets = match project.auth.environments.get(name) {
                 Some(AuthEnvironment::Fixed { credentials, .. }) => credentials
                     .presets
                     .iter()
@@ -82,7 +81,10 @@ pub async fn environments(
                     .unwrap_or_default(),
                 None => Vec::new(),
             };
-            EnvironmentSummary { name, auth_presets }
+            EnvironmentSummary {
+                name: name.clone(),
+                auth_presets,
+            }
         })
         .collect::<Vec<_>>();
     Ok(web::Json(items))

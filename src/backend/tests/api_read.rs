@@ -17,12 +17,24 @@ async fn read_json(resp: actix_web::dev::ServiceResponse) -> Result<Value> {
 fn environment_yaml() -> &'static str {
     r#"
 name: local
+order: 2
 constants:
   base_url:
     value: http://localhost:18080
 variables:
   user_id:
     value: "42"
+"#
+}
+
+fn ordered_environment_yaml() -> &'static str {
+    r#"
+name: alpha
+order: 1
+constants:
+  base_url:
+    value: http://localhost:18081
+variables: {}
 "#
 }
 
@@ -168,5 +180,51 @@ async fn new_log_endpoint_creates_log_file() -> Result<()> {
         .expect("log file path should exist");
     assert_eq!(body["project"], PROJECT);
     assert!(std::path::Path::new(file).exists());
+    Ok(())
+}
+
+#[actix_web::test]
+async fn environments_endpoint_returns_items_in_order_sequence() -> Result<()> {
+    let ctx = TestContext::new(
+        environment_yaml(),
+        auth_yaml(),
+        &[("users/get-user.yaml", request_yaml())],
+    )?;
+
+    std::fs::write(
+        ctx.store
+            .paths
+            .defs_root
+            .join(PROJECT)
+            .join("environments")
+            .join("alpha.yaml"),
+        ordered_environment_yaml(),
+    )?;
+
+    let store = vurl_backend::runtime::store::RuntimeStore::load(ctx.store.paths.clone())?;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(vurl_backend::state::app_state::AppState {
+                store,
+                backend_url: "http://127.0.0.1:1357".to_string(),
+            }))
+            .service(api::environments),
+    )
+    .await;
+
+    let env_resp = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri("/api/environments?project=project-1")
+            .to_request(),
+    )
+    .await;
+    assert_eq!(env_resp.status(), StatusCode::OK);
+
+    let environments = read_json(env_resp).await?;
+    assert_eq!(environments[0]["name"], "alpha");
+    assert_eq!(environments[1]["name"], "local");
+
     Ok(())
 }

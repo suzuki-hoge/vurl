@@ -17,6 +17,18 @@ use crate::{
     models::runtime::RuntimeEnvironmentState,
 };
 
+fn compare_environment_definitions(
+    left_name: &str,
+    left: &EnvironmentDefinition,
+    right_name: &str,
+    right: &EnvironmentDefinition,
+) -> std::cmp::Ordering {
+    left.order
+        .unwrap_or(u32::MAX)
+        .cmp(&right.order.unwrap_or(u32::MAX))
+        .then_with(|| left_name.cmp(right_name))
+}
+
 #[derive(Debug)]
 pub struct RuntimeStore {
     pub paths: AppPaths,
@@ -104,9 +116,14 @@ impl RuntimeStore {
 
     pub fn environment_names(&self, project: &str) -> Result<Vec<String>> {
         let project = self.project(project)?;
-        let mut names: Vec<_> = project.environments.keys().cloned().collect();
-        names.sort();
-        Ok(names)
+        let mut environments: Vec<_> = project.environments.iter().collect();
+        environments.sort_by(|(left_name, left), (right_name, right)| {
+            compare_environment_definitions(left_name, left, right_name, right)
+        });
+        Ok(environments
+            .into_iter()
+            .map(|(name, _)| name.clone())
+            .collect())
     }
 
     pub fn env_state(&self, project: &str, environment: &str) -> Result<RuntimeEnvironmentState> {
@@ -201,6 +218,16 @@ fn load_environments(dir: &Path) -> Result<HashMap<String, EnvironmentDefinition
     }
 
     Ok(items)
+}
+
+pub fn sorted_environments(
+    environments: &HashMap<String, EnvironmentDefinition>,
+) -> Vec<(&String, &EnvironmentDefinition)> {
+    let mut items: Vec<_> = environments.iter().collect();
+    items.sort_by(|(left_name, left), (right_name, right)| {
+        compare_environment_definitions(left_name, left, right_name, right)
+    });
+    items
 }
 
 fn load_auth(path: &Path) -> Result<AuthDefinitions> {
@@ -350,12 +377,25 @@ request:
             root.join("defs/project-1/environments/local.yaml"),
             r#"
 name: local
+order: 2
 constants:
   base_url:
     value: http://localhost:18080
 variables:
   user_id:
     value: "42"
+"#,
+        )?;
+
+        fs::write(
+            root.join("defs/project-1/environments/alpha.yaml"),
+            r#"
+name: alpha
+order: 1
+constants:
+  base_url:
+    value: http://localhost:18081
+variables: {}
 "#,
         )?;
 
@@ -381,7 +421,7 @@ environments:
         assert_eq!(store.project_names(), vec!["project-1".to_string()]);
         assert_eq!(
             store.environment_names("project-1")?,
-            vec!["local".to_string()]
+            vec!["alpha".to_string(), "local".to_string()]
         );
 
         let tree = store.tree("project-1")?;

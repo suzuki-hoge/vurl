@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EnvironmentDefinition {
     pub name: String,
+    pub order: Option<u32>,
     #[serde(default)]
     pub constants: HashMap<String, EnvironmentValue>,
     #[serde(default)]
