@@ -1,4 +1,8 @@
-import type { RequestDefinition, RequestKeyValue } from "../../types/api"
+import type {
+  RequestDefinition,
+  RequestFormField,
+  RequestKeyValue
+} from "../../types/api"
 
 export type DraftHeaderState = "editable" | "locked" | "off"
 
@@ -6,6 +10,18 @@ export type DraftHeader = {
   key: string
   value: string
   state: DraftHeaderState
+}
+
+export type DraftFormSelectItem = {
+  value: string
+  description: string
+}
+
+export type DraftFormField = {
+  key: string
+  value: string
+  enabled: boolean
+  items?: DraftFormSelectItem[]
 }
 
 export type DraftState = {
@@ -25,7 +41,7 @@ export type DraftState = {
       }
     | {
         type: "form"
-        form: RequestKeyValue[]
+        form: DraftFormField[]
       }
 }
 
@@ -64,7 +80,10 @@ export function definitionToDraft(
     body:
       definition.request.body.type === "json"
         ? { type: "json", text: definition.request.body.text }
-        : { type: "form", form: definition.request.body.form }
+        : {
+            type: "form",
+            form: definition.request.body.form.map(definitionFormFieldToDraft)
+          }
   }
 }
 
@@ -75,6 +94,13 @@ export function sanitizePairs(items: RequestKeyValue[]): RequestKeyValue[] {
 export function sanitizeHeaderPairs(items: DraftHeader[]): RequestKeyValue[] {
   return items
     .filter((item) => item.state !== "off")
+    .filter((item) => item.key.trim() !== "")
+    .map((item) => ({ key: item.key, value: item.value }))
+}
+
+export function sanitizeFormPairs(items: DraftFormField[]): RequestKeyValue[] {
+  return items
+    .filter((item) => item.enabled)
     .filter((item) => item.key.trim() !== "")
     .map((item) => ({ key: item.key, value: item.value }))
 }
@@ -115,4 +141,26 @@ export function shouldInjectJsonContentType(draft: DraftState): boolean {
 export function hasHeader(items: DraftHeader[], key: string): boolean {
   const normalizedKey = key.trim().toLowerCase()
   return items.some((item) => item.key.trim().toLowerCase() === normalizedKey)
+}
+
+function definitionFormFieldToDraft(field: RequestFormField): DraftFormField {
+  if (field.items.length === 0) {
+    return {
+      key: field.key,
+      value: field.value ?? "",
+      enabled: field.enabled
+    }
+  }
+
+  const defaultItem = field.items.find((item) => item.default)
+  if (!defaultItem) {
+    throw new Error(`form field '${field.key}' is missing default item`)
+  }
+
+  return {
+    key: field.key,
+    value: defaultItem.value,
+    enabled: field.enabled,
+    items: field.items.map(({ value, description }) => ({ value, description }))
+  }
 }

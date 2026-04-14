@@ -335,6 +335,10 @@ async fn reload_endpoint_keeps_previous_store_when_yaml_is_invalid() -> Result<(
     )
     .await;
     assert_eq!(reload_resp.status(), StatusCode::BAD_REQUEST);
+    let reload_body = read_json(reload_resp).await?;
+    assert!(reload_body["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("failed to parse")));
 
     let definition_resp = test::call_service(
         &app,

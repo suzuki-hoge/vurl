@@ -6,6 +6,7 @@ import {
   definitionToDraft,
   emptyDraft,
   persistHeaders,
+  sanitizeFormPairs,
   sanitizeHeaderPairs,
   sanitizePairs,
   shouldInjectJsonContentType
@@ -97,5 +98,67 @@ describe("request model", () => {
         { key: "X-Off", value: "2", state: "off" }
       ])
     ).toEqual([{ key: "X-On", value: "1" }])
+
+    expect(
+      sanitizeFormPairs([
+        { key: "", value: "skip", enabled: true },
+        { key: "type", value: "1", enabled: true },
+        { key: "mode", value: "2", enabled: false }
+      ])
+    ).toEqual([{ key: "type", value: "1" }])
+  })
+
+  test("definitionToDraft resolves form select default value", () => {
+    const definition: RequestDefinition = {
+      name: "Sleep Add",
+      method: "POST",
+      path: "/sleep",
+      auth: true,
+      request: {
+        query: [],
+        headers: [],
+        body: {
+          type: "form",
+          form: [
+            {
+              key: "type",
+              enabled: true,
+              items: [
+                { value: "0", description: "通常", default: false },
+                { value: "1", description: "昼寝", default: true }
+              ]
+            },
+            {
+              key: "memo",
+              value: "",
+              enabled: false,
+              items: []
+            }
+          ]
+        }
+      }
+    }
+
+    expect(
+      definitionToDraft("project-1", "local", "sleep/add.yaml", definition).body
+    ).toEqual({
+      type: "form",
+      form: [
+        {
+          key: "type",
+          value: "1",
+          enabled: true,
+          items: [
+            { value: "0", description: "通常" },
+            { value: "1", description: "昼寝" }
+          ]
+        },
+        {
+          key: "memo",
+          value: "",
+          enabled: false
+        }
+      ]
+    })
   })
 })

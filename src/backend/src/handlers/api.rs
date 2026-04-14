@@ -131,7 +131,7 @@ pub async fn send(
         Err(error) if is_timeout_error(&error) => {
             Ok(HttpResponse::InternalServerError().json(build_timeout_response()))
         }
-        Err(error) => Err(actix_web::error::ErrorBadRequest(error)),
+        Err(error) => Ok(HttpResponse::BadRequest().json(build_error_response(error))),
     }
 }
 
@@ -151,9 +151,12 @@ pub async fn new_log(
 
 #[post("/api/reload")]
 pub async fn reload(state: web::Data<AppState>) -> actix_web::Result<impl Responder> {
-    let store = state.reload().map_err(actix_web::error::ErrorBadRequest)?;
+    let store = match state.reload() {
+        Ok(store) => store,
+        Err(error) => return Ok(HttpResponse::BadRequest().json(build_error_response(error))),
+    };
 
-    Ok(web::Json(ReloadResponse {
+    Ok(HttpResponse::Ok().json(ReloadResponse {
         success: true,
         message: "reload completed".to_string(),
         project_count: store.project_names().len(),
@@ -193,5 +196,11 @@ fn build_timeout_response() -> SendResponse {
             ),
         }],
         current_log_file: String::new(),
+    })
+}
+
+fn build_error_response(error: AnyhowError) -> serde_json::Value {
+    json!({
+        "message": error.to_string(),
     })
 }

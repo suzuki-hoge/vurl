@@ -50,6 +50,35 @@ body:
 
 - `type: json` のとき `text`
 - `type: form` のとき `form`
+- form 項目で `items` がある場合は select 扱い
+- `items` がある項目は `value` を持たない
+- `items[].default: true` はちょうど 1 つ必須
+- `enabled: false` のときだけ初期表示オフ
+
+form 例:
+
+```yaml
+body:
+  type: form
+  form:
+    - key: start_time
+      value: "20240324220000"
+    - key: type
+      items:
+        - value: "0"
+          description: 通常
+        - value: "1"
+          description: 昼寝
+          default: true
+    - key: mode
+      enabled: false
+      items:
+        - value: "0"
+          description: 手入力
+          default: true
+        - value: "1"
+          description: 自動記録
+```
 
 ## 環境定義
 

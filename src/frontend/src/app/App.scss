@@ -729,6 +729,12 @@ textarea {
   text-decoration: line-through;
 }
 
+.kv-row-body.is-off input,
+.kv-row-body.is-off .ui-select-element {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
 .kv-footer {
   display: flex;
   justify-content: flex-end;
@@ -868,11 +874,62 @@ textarea {
   box-shadow: 0 0 0 1px var(--border);
 }
 
-.error-banner {
-  background: #3a2028;
-  color: #ffc5cf;
+.error-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(6, 10, 18, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.error-modal {
+  width: min(56rem, 100%);
+  max-height: min(80vh, 52rem);
+  background: #141b27;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 0.8rem 0.9rem;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.error-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.error-modal-close {
+  width: 2.5rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  background: transparent;
+  color: var(--text-soft);
+  border-radius: var(--radius-md);
+}
+
+.error-modal-close:hover {
+  background: rgba(125, 145, 175, 0.12);
+  color: var(--text-main);
+}
+
+.error-modal-body {
+  margin: 0;
+  padding: 1.1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #ffc5cf;
+  background: #2a1820;
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  flex: 1;
 }
 
 .method-tag.method-get {

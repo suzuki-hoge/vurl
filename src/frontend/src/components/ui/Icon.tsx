@@ -4,7 +4,8 @@ import {
   FiPlus,
   FiSearch,
   FiSquare,
-  FiTrash2
+  FiTrash2,
+  FiX
 } from "react-icons/fi"
 import { RxReload } from "react-icons/rx"
 
@@ -15,7 +16,8 @@ const icons = {
   reload: RxReload,
   search: FiSearch,
   square: FiSquare,
-  trash: FiTrash2
+  trash: FiTrash2,
+  x: FiX
 } as const
 
 export type IconName = keyof typeof icons

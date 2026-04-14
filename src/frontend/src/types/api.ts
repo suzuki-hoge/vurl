@@ -31,6 +31,19 @@ export type RequestKeyValue = {
   value: string
 }
 
+export type RequestFormSelectItem = {
+  value: string
+  description: string
+  default: boolean
+}
+
+export type RequestFormField = {
+  key: string
+  value?: string
+  enabled: boolean
+  items: RequestFormSelectItem[]
+}
+
 export type RequestDefinition = {
   name: string
   method: string
@@ -46,7 +59,7 @@ export type RequestDefinition = {
         }
       | {
           type: "form"
-          form: RequestKeyValue[]
+          form: RequestFormField[]
         }
   }
 }

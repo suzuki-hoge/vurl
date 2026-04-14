@@ -12,7 +12,7 @@ use crate::{
         auth::AuthDefinitions,
         environment::EnvironmentDefinition,
         project::{ProjectData, RequestTreeNode},
-        request::RequestDefinition,
+        request::{FormFieldDefinition, RequestBodyDefinition, RequestDefinition},
     },
     models::runtime::RuntimeEnvironmentState,
 };
@@ -180,6 +180,8 @@ fn load_requests(dir: &Path) -> Result<HashMap<String, RequestDefinition>> {
                 .with_context(|| format!("failed to read {}", full_path.display()))?,
         )
         .with_context(|| format!("failed to parse {}", full_path.display()))?;
+        validate_request_definition(&definition)
+            .with_context(|| format!("invalid request definition {}", full_path.display()))?;
         items.insert(relative_path, definition);
         Ok(())
     })?;
@@ -272,6 +274,41 @@ fn visit_yaml_files(root: &Path, mut visit: impl FnMut(String, &Path) -> Result<
     }
 
     walk(root, root, &mut visit)
+}
+
+fn validate_request_definition(definition: &RequestDefinition) -> Result<()> {
+    let RequestBodyDefinition::Form { form } = &definition.request.body else {
+        return Ok(());
+    };
+
+    for field in form {
+        validate_form_field(field)?;
+    }
+
+    Ok(())
+}
+
+fn validate_form_field(field: &FormFieldDefinition) -> Result<()> {
+    if field.items.is_empty() {
+        if field.value.is_none() {
+            bail!("form field '{}' requires value", field.key);
+        }
+        return Ok(());
+    }
+
+    if field.value.is_some() {
+        bail!("form field '{}' with items must not define value", field.key);
+    }
+
+    let default_count = field.items.iter().filter(|item| item.default).count();
+    if default_count != 1 {
+        bail!(
+            "form field '{}' with items requires exactly one default item",
+            field.key
+        );
+    }
+
+    Ok(())
 }
 
 #[derive(Default)]
@@ -431,6 +468,65 @@ environments:
         assert_eq!(definition.name, "Get User");
         assert_eq!(definition.method, "GET");
         assert_eq!(definition.request.headers.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn load_rejects_form_select_without_single_default() -> Result<()> {
+        let tmp = tempdir()?;
+        let root = tmp.path();
+        fs::create_dir_all(root.join("defs/project-1/requests/forms"))?;
+        fs::create_dir_all(root.join("defs/project-1/environments"))?;
+
+        fs::write(
+            root.join("defs/project-1/requests/forms/add.yaml"),
+            r#"
+name: Add
+method: POST
+path: /add
+auth: false
+request:
+  query: []
+  headers: []
+  body:
+    type: form
+    form:
+      - key: type
+        items:
+          - value: "0"
+            description: normal
+          - value: "1"
+            description: nap
+"#,
+        )?;
+
+        fs::write(
+            root.join("defs/project-1/environments/local.yaml"),
+            r#"
+name: local
+constants:
+  base_url:
+    value: http://localhost:18080
+variables: {}
+"#,
+        )?;
+
+        fs::write(
+            root.join("defs/project-1/environments/auth.yaml"),
+            r#"
+environments:
+  local:
+    mode: fixed
+    credentials:
+      presets: []
+    mappings:
+      items: []
+"#,
+        )?;
+
+        let paths = AppPaths::new(root)?;
+        RuntimeStore::load(paths).expect_err("load should fail");
 
         Ok(())
     }

@@ -16,7 +16,7 @@ const BACKEND_URL =
     : "http://127.0.0.1:1357")
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BACKEND_URL}${path}`, {
+  const response = await fetchWithError(`${BACKEND_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {})
@@ -25,15 +25,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || `HTTP ${response.status}`)
+    throw await buildResponseError(response)
   }
 
   return response.json() as Promise<T>
 }
 
 async function requestSend(payload: SendRequestPayload): Promise<SendResponse> {
-  const response = await fetch(`${BACKEND_URL}/api/send`, {
+  const response = await fetchWithError(`${BACKEND_URL}/api/send`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -42,12 +41,60 @@ async function requestSend(payload: SendRequestPayload): Promise<SendResponse> {
   })
 
   const contentType = response.headers.get("content-type") ?? ""
+  if (!response.ok) {
+    throw await buildResponseError(response)
+  }
+
   if (contentType.toLowerCase().includes("application/json")) {
     return (await response.json()) as SendResponse
   }
 
   const text = await response.text()
   throw new Error(text || `HTTP ${response.status}`)
+}
+
+async function fetchWithError(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause)
+    throw new Error(
+      `Request failed: ${typeof input === "string" ? input : input.toString()}\n${detail}`
+    )
+  }
+}
+
+async function buildResponseError(response: Response): Promise<Error> {
+  const text = await response.text()
+  const message = parseErrorMessage(text)
+  return new Error(
+    [
+      `HTTP ${response.status} ${response.statusText}`.trim(),
+      message
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+  )
+}
+
+function parseErrorMessage(text: string): string {
+  if (!text.trim()) {
+    return ""
+  }
+
+  try {
+    const parsed = JSON.parse(text) as { message?: unknown }
+    if (typeof parsed.message === "string") {
+      return parsed.message
+    }
+  } catch {
+    return text
+  }
+
+  return text
 }
 
 export const apiClient = {

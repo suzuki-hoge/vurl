@@ -24,5 +24,28 @@ pub struct RequestPayload {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum RequestBodyDefinition {
     Json { text: String },
-    Form { form: Vec<KeyValueEntry> },
+    Form { form: Vec<FormFieldDefinition> },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FormFieldDefinition {
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub items: Vec<FormFieldSelectItemDefinition>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FormFieldSelectItemDefinition {
+    pub value: String,
+    pub description: String,
+    #[serde(default)]
+    pub default: bool,
+}
+
+fn default_enabled() -> bool {
+    true
 }

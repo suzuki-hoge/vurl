@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import toast from "react-hot-toast"
 
 import { apiClient } from "../api/client"
+import { BodyFormEditor } from "../components/request/BodyFormEditor"
 import { HeaderEditor } from "../components/request/HeaderEditor"
 import { KeyValueEditor } from "../components/request/KeyValueEditor"
 import { TreeNodeView } from "../components/tree/TreeNodeView"
@@ -16,6 +17,7 @@ import {
   definitionToDraft,
   emptyDraft,
   persistHeaders,
+  sanitizeFormPairs,
   sanitizeHeaderPairs,
   sanitizePairs,
   type DraftState
@@ -142,6 +144,21 @@ export function App() {
     document.title =
       draft.name || (routeProject ? `vurl - ${routeProject}` : "vurl")
   }, [draft.name, routeProject])
+
+  useEffect(() => {
+    if (!error || typeof window === "undefined") {
+      return
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setError("")
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [error])
 
   useEffect(() => {
     const summary = environmentSummaries.find(
@@ -272,7 +289,7 @@ export function App() {
         body:
           draft.body.type === "json"
             ? { type: "json", text: draft.body.text }
-            : { type: "form", form: sanitizePairs(draft.body.form) },
+            : { type: "form", form: sanitizeFormPairs(draft.body.form) },
         auth_enabled: draft.auth,
         auth_input_mode: authInputMode,
         auth_preset_name:
@@ -367,7 +384,6 @@ export function App() {
         <div className="project-home-card">
           <div className="panel-title">vurl</div>
           <p className="project-home-copy">Project を選択してください。</p>
-          {error ? <div className="error-banner">{error}</div> : null}
           <div className="project-list">
             {projects.map((item) => (
               <Button
@@ -381,6 +397,7 @@ export function App() {
             ))}
           </div>
         </div>
+        <ErrorModal message={error} onClose={() => setError("")} />
       </div>
     )
   }
@@ -439,8 +456,6 @@ export function App() {
             }}
           >
             <div className="panel-fixed">
-              {error ? <div className="error-banner">{error}</div> : null}
-
               <div className="request-heading">
                 <span
                   className={`method-tag request-method method-${draft.method.toLowerCase()}`}
@@ -610,7 +625,7 @@ export function App() {
                       }
                     />
                   ) : (
-                    <KeyValueEditor
+                    <BodyFormEditor
                       items={draft.body.form}
                       onChange={(items) =>
                         setDraft((current) => ({
@@ -724,6 +739,46 @@ export function App() {
           </div>
         </section>
       </main>
+
+      <ErrorModal message={error} onClose={() => setError("")} />
+    </div>
+  )
+}
+
+function ErrorModal(props: { message: string; onClose: () => void }) {
+  const { message, onClose } = props
+
+  if (!message) {
+    return null
+  }
+
+  return (
+    <div
+      className="error-modal-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        aria-labelledby="error-modal-title"
+        aria-modal="true"
+        className="error-modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className="error-modal-header">
+          <div className="panel-title" id="error-modal-title">
+            Error
+          </div>
+          <IconButton
+            aria-label="Close error modal"
+            className="error-modal-close"
+            icon="x"
+            onClick={onClose}
+            type="button"
+          />
+        </div>
+        <pre className="error-modal-body">{message}</pre>
+      </div>
     </div>
   )
 }
