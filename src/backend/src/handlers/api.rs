@@ -6,9 +6,10 @@ use crate::{
     domain::auth::AuthEnvironment,
     handlers::api_types::{
         AuthPresetSummary, DefinitionQuery, DefinitionResponse, EnvironmentSummary,
-        LogFileResponse, ProjectQuery, ProjectSummary, RuntimeInfo, SendRequest, SendResponse,
-        TreeResponse,
+        LogFileResponse, ProjectQuery, ProjectSummary, ReloadResponse, RuntimeInfo, SendRequest,
+        SendResponse, TreeResponse,
     },
+    runtime::store::sorted_environments,
     services::{
         logging::create_manual_log_file,
         request_execution::{
@@ -16,21 +17,20 @@ use crate::{
             ResponseNotificationCode, ResponseNotificationKind, execute_request,
         },
     },
-    runtime::store::sorted_environments,
     state::app_state::AppState,
 };
 
 #[get("/api/runtime")]
 pub async fn runtime(state: web::Data<AppState>) -> actix_web::Result<impl Responder> {
-    let project_list: Vec<ProjectSummary> = state
-        .store
+    let store = state.store();
+    let project_list: Vec<ProjectSummary> = store
         .project_names()
         .into_iter()
         .map(|name| ProjectSummary { name })
         .collect();
 
     Ok(web::Json(RuntimeInfo {
-        root: state.store.paths.root.display().to_string(),
+        root: store.paths.root.display().to_string(),
         projects: project_list,
         backend_url: state.backend_url.clone(),
     }))
@@ -38,8 +38,8 @@ pub async fn runtime(state: web::Data<AppState>) -> actix_web::Result<impl Respo
 
 #[get("/api/projects")]
 pub async fn projects(state: web::Data<AppState>) -> actix_web::Result<impl Responder> {
-    let projects: Vec<_> = state
-        .store
+    let store = state.store();
+    let projects: Vec<_> = store
         .project_names()
         .into_iter()
         .map(|name| ProjectSummary { name })
@@ -52,8 +52,8 @@ pub async fn environments(
     state: web::Data<AppState>,
     query: web::Query<ProjectQuery>,
 ) -> actix_web::Result<impl Responder> {
-    let project = state
-        .store
+    let store = state.store();
+    let project = store
         .project(&query.project)
         .map_err(actix_web::error::ErrorBadRequest)?;
     let items = sorted_environments(&project.environments)
@@ -95,8 +95,8 @@ pub async fn tree(
     state: web::Data<AppState>,
     query: web::Query<ProjectQuery>,
 ) -> actix_web::Result<impl Responder> {
-    let nodes = state
-        .store
+    let store = state.store();
+    let nodes = store
         .tree(&query.project)
         .map_err(actix_web::error::ErrorBadRequest)?;
     Ok(web::Json(TreeResponse {
@@ -110,8 +110,8 @@ pub async fn definition(
     state: web::Data<AppState>,
     query: web::Query<DefinitionQuery>,
 ) -> actix_web::Result<impl Responder> {
-    let definition = state
-        .store
+    let store = state.store();
+    let definition = store
         .request_definition(&query.project, &query.path)
         .map_err(actix_web::error::ErrorBadRequest)?;
     Ok(web::Json(DefinitionResponse {
@@ -125,7 +125,8 @@ pub async fn send(
     state: web::Data<AppState>,
     payload: web::Json<SendRequest>,
 ) -> actix_web::Result<impl Responder> {
-    match execute_request(&state.store, payload.into_inner().into()).await {
+    let store = state.store();
+    match execute_request(store.as_ref(), payload.into_inner().into()).await {
         Ok(response) => Ok(HttpResponse::Ok().json(SendResponse::from(response))),
         Err(error) if is_timeout_error(&error) => {
             Ok(HttpResponse::InternalServerError().json(build_timeout_response()))
@@ -139,11 +140,23 @@ pub async fn new_log(
     state: web::Data<AppState>,
     payload: web::Json<ProjectQuery>,
 ) -> actix_web::Result<impl Responder> {
-    let file = create_manual_log_file(&state.store, &payload.project)
+    let store = state.store();
+    let file = create_manual_log_file(store.as_ref(), &payload.project)
         .map_err(actix_web::error::ErrorInternalServerError)?;
     Ok(web::Json(LogFileResponse {
         project: payload.project.clone(),
         current_log_file: file.display().to_string(),
+    }))
+}
+
+#[post("/api/reload")]
+pub async fn reload(state: web::Data<AppState>) -> actix_web::Result<impl Responder> {
+    let store = state.reload().map_err(actix_web::error::ErrorBadRequest)?;
+
+    Ok(web::Json(ReloadResponse {
+        success: true,
+        message: "reload completed".to_string(),
+        project_count: store.project_names().len(),
     }))
 }
 

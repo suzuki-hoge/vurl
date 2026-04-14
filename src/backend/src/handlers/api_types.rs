@@ -65,6 +65,13 @@ pub struct LogFileResponse {
     pub current_log_file: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ReloadResponse {
+    pub success: bool,
+    pub message: String,
+    pub project_count: usize,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SendRequest {
     pub project: String,

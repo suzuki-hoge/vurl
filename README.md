@@ -42,19 +42,24 @@ vurl
 
 `vurl` は以下を行います。
 
-- release build の `vurl-backend` を起動する
-- `http://127.0.0.1:1357` をブラウザで開く
+- release build の `vurl-backend` をバックグラウンド起動する
+- 起動済みでなければ `http://127.0.0.1:1357` をブラウザで開く
 - backend が frontend の `dist` を静的配信する
+- YAML の反映は画面上の `Reload YAML` ボタンから行う
 
 補助コマンド:
 
 ```sh
-vurl -l
-vurl -y
+vurl --down
+vurl --log-dir
+vurl --log-dir <project>
+vurl --edit
 ```
 
-- `vurl -l`: `$HOME/.vurl/logs` に移動
-- `vurl -y`: `$HOME/.vurl/defs` に移動
+- `vurl --down`: バックグラウンドの `vurl-backend` を停止
+- `vurl --log-dir`: `$HOME/.vurl/logs` に移動
+- `vurl --log-dir <project>`: `$HOME/.vurl/logs/<project>` に移動
+- `vurl --edit`: リポジトリルートを `IntelliJ IDEA 2.app` で開く
 
 ## 開発用コマンド
 
@@ -81,10 +86,9 @@ make build-all
 make fix-all
 ```
 
-## Supervisor 操作
+## YAML 再読込
 
-`vurl` で起動した backend は supervisor モードで動きます。
+YAML を編集したあとは、画面左上の `Reload YAML` ボタンで backend に再読込を要求します。
 
-- `c`: 全 YAML チェック
-- `r`: backend 子プロセス再起動
-- `q`: 終了
+- reload 成功時はブラウザ全体を再読み込み
+- YAML の書式エラーなどで reload 失敗時は画面にエラー表示

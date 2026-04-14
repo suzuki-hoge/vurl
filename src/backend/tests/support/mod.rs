@@ -55,10 +55,7 @@ impl TestContext {
 
     #[allow(dead_code)]
     pub fn app_state(&self) -> AppState {
-        AppState {
-            store: Arc::clone(&self.store),
-            backend_url: "http://127.0.0.1:1357".to_string(),
-        }
+        AppState::new(Arc::clone(&self.store), "http://127.0.0.1:1357".to_string())
     }
 }
 

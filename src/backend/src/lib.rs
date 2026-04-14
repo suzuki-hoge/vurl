@@ -6,7 +6,6 @@ pub mod errors;
 pub mod handlers;
 pub mod logging;
 pub mod models;
-pub mod process;
 pub mod runtime;
 pub mod services;
 pub mod state;

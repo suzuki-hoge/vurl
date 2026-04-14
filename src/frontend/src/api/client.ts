@@ -2,6 +2,7 @@ import type {
   DefinitionResponse,
   EnvironmentSummary,
   ProjectSummary,
+  ReloadResponse,
   RuntimeInfo,
   SendRequestPayload,
   SendResponse,
@@ -62,5 +63,9 @@ export const apiClient = {
     request<DefinitionResponse>(
       `/api/definition?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`
     ),
+  reload: () =>
+    request<ReloadResponse>("/api/reload", {
+      method: "POST"
+    }),
   send: (payload: SendRequestPayload) => requestSend(payload)
 }

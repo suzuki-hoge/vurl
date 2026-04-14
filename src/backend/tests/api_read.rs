@@ -205,10 +205,12 @@ async fn environments_endpoint_returns_items_in_order_sequence() -> Result<()> {
 
     let app = test::init_service(
         App::new()
-            .app_data(web::Data::new(vurl_backend::state::app_state::AppState {
-                store,
-                backend_url: "http://127.0.0.1:1357".to_string(),
-            }))
+            .app_data(web::Data::new(
+                vurl_backend::state::app_state::AppState::new(
+                    store,
+                    "http://127.0.0.1:1357".to_string(),
+                ),
+            ))
             .service(api::environments),
     )
     .await;
@@ -226,5 +228,123 @@ async fn environments_endpoint_returns_items_in_order_sequence() -> Result<()> {
     assert_eq!(environments[0]["name"], "alpha");
     assert_eq!(environments[1]["name"], "local");
 
+    Ok(())
+}
+
+#[actix_web::test]
+async fn reload_endpoint_replaces_store_and_returns_project_count() -> Result<()> {
+    let ctx = TestContext::new(
+        environment_yaml(),
+        auth_yaml(),
+        &[("users/get-user.yaml", request_yaml())],
+    )?;
+
+    let app_state = ctx.app_state();
+    std::fs::create_dir_all(ctx.store.paths.defs_root.join("project-2/requests"))?;
+    std::fs::create_dir_all(ctx.store.paths.defs_root.join("project-2/environments"))?;
+    std::fs::write(
+        ctx.store
+            .paths
+            .defs_root
+            .join("project-2/requests/ping.yaml"),
+        r#"
+name: Ping
+method: GET
+path: /ping
+auth: false
+request:
+  query: []
+  headers: []
+  body:
+    type: json
+    text: ""
+"#,
+    )?;
+    std::fs::write(
+        ctx.store
+            .paths
+            .defs_root
+            .join("project-2/environments/local.yaml"),
+        environment_yaml(),
+    )?;
+    std::fs::write(
+        ctx.store
+            .paths
+            .defs_root
+            .join("project-2/environments/auth.yaml"),
+        auth_yaml(),
+    )?;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state))
+            .service(api::reload)
+            .service(api::projects),
+    )
+    .await;
+
+    let reload_resp = test::call_service(
+        &app,
+        test::TestRequest::post().uri("/api/reload").to_request(),
+    )
+    .await;
+    assert_eq!(reload_resp.status(), StatusCode::OK);
+    let reload_body = read_json(reload_resp).await?;
+    assert_eq!(reload_body["success"], true);
+    assert_eq!(reload_body["project_count"], 2);
+
+    let projects_resp = test::call_service(
+        &app,
+        test::TestRequest::get().uri("/api/projects").to_request(),
+    )
+    .await;
+    let projects = read_json(projects_resp).await?;
+    assert_eq!(projects[1]["name"], "project-2");
+    Ok(())
+}
+
+#[actix_web::test]
+async fn reload_endpoint_keeps_previous_store_when_yaml_is_invalid() -> Result<()> {
+    let ctx = TestContext::new(
+        environment_yaml(),
+        auth_yaml(),
+        &[("users/get-user.yaml", request_yaml())],
+    )?;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(ctx.app_state()))
+            .service(api::reload)
+            .service(api::definition),
+    )
+    .await;
+
+    std::fs::write(
+        ctx.store
+            .paths
+            .defs_root
+            .join(PROJECT)
+            .join("requests")
+            .join("users/get-user.yaml"),
+        "name: broken: yaml",
+    )?;
+
+    let reload_resp = test::call_service(
+        &app,
+        test::TestRequest::post().uri("/api/reload").to_request(),
+    )
+    .await;
+    assert_eq!(reload_resp.status(), StatusCode::BAD_REQUEST);
+
+    let definition_resp = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri("/api/definition?project=project-1&path=users/get-user.yaml")
+            .to_request(),
+    )
+    .await;
+    assert_eq!(definition_resp.status(), StatusCode::OK);
+    let definition = read_json(definition_resp).await?;
+    assert_eq!(definition["definition"]["name"], "Get User");
     Ok(())
 }

@@ -6,11 +6,13 @@ import {
   FiSquare,
   FiTrash2
 } from "react-icons/fi"
+import { RxReload } from "react-icons/rx"
 
 const icons = {
   "chevron-down": FiChevronDown,
   "check-square": FiCheckSquare,
   plus: FiPlus,
+  reload: RxReload,
   search: FiSearch,
   square: FiSquare,
   trash: FiTrash2

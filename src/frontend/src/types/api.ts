@@ -67,6 +67,12 @@ export type RuntimeInfo = {
   backend_url: string
 }
 
+export type ReloadResponse = {
+  success: boolean
+  message: string
+  project_count: number
+}
+
 export type SendRequestPayload = {
   project: string
   environment: string

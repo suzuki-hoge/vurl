@@ -6,6 +6,7 @@ import { HeaderEditor } from "../components/request/HeaderEditor"
 import { KeyValueEditor } from "../components/request/KeyValueEditor"
 import { TreeNodeView } from "../components/tree/TreeNodeView"
 import { Button } from "../components/ui/Button"
+import { IconButton } from "../components/ui/IconButton"
 import { Input } from "../components/ui/Input"
 import { JsonCodeBlock } from "../components/ui/JsonCodeBlock"
 import { Select } from "../components/ui/Select"
@@ -54,7 +55,7 @@ export function App() {
   const [routeRequestPath, setRouteRequestPath] = useState(
     getRequestPathFromLocation()
   )
-  const [project, setProject] = useState("")
+  const [project, setProject] = useState(() => getProjectFromLocation() ?? "")
   const [environmentSummaries, setEnvironmentSummaries] = useState<
     EnvironmentSummary[]
   >([])
@@ -79,6 +80,7 @@ export function App() {
   const [responseTab, setResponseTab] = useState<ResponseTab>("body")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
+  const [reloading, setReloading] = useState(false)
   const [sending, setSending] = useState(false)
   const effectiveHeaders = useMemo(() => buildEffectiveHeaders(draft), [draft])
 
@@ -301,6 +303,19 @@ export function App() {
     }
   }
 
+  async function reloadYaml() {
+    try {
+      setReloading(true)
+      setError("")
+      await apiClient.reload()
+      window.location.reload()
+    } catch (cause) {
+      setError(toErrorMessage(cause))
+    } finally {
+      setReloading(false)
+    }
+  }
+
   function showToast(notification: ResponseNotification) {
     if (notification.code === "authenticated") {
       toast("Authenticated", {
@@ -346,38 +361,13 @@ export function App() {
       ? `data:${responseContentType};base64,${response.body_base64}`
       : null
 
-  const routeProjectExists = !routeProject || projects.includes(routeProject)
-
-  if (!routeProject) {
+  if (!project) {
     return (
       <div className="project-home">
         <div className="project-home-card">
           <div className="panel-title">vurl</div>
           <p className="project-home-copy">Project を選択してください。</p>
           {error ? <div className="error-banner">{error}</div> : null}
-          <div className="project-list">
-            {projects.map((item) => (
-              <Button
-                key={item}
-                className="project-link"
-                onClick={() => openProject(item)}
-                type="button"
-              >
-                {item}
-              </Button>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!routeProjectExists) {
-    return (
-      <div className="project-home">
-        <div className="project-home-card">
-          <div className="panel-title">vurl</div>
-          <div className="error-banner">project not found: {routeProject}</div>
           <div className="project-list">
             {projects.map((item) => (
               <Button
@@ -405,6 +395,16 @@ export function App() {
             onChange={(event) => setFilterText(event.target.value)}
             placeholder="path or name"
             wrapperClassName="search-field"
+          />
+          <IconButton
+            className="sidebar-reload"
+            disabled={reloading}
+            icon="reload"
+            onClick={() => {
+              void reloadYaml()
+            }}
+            aria-label="Reload YAML"
+            title="Reload YAML"
           />
         </div>
 

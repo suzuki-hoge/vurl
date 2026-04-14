@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware, web};
 use anyhow::Result;
@@ -22,19 +20,17 @@ pub fn build_app(_cli: Cli) -> Result<BackendApp> {
     let backend_url = "http://127.0.0.1:1357".to_string();
 
     Ok(BackendApp {
-        state: AppState {
-            store: Arc::clone(&store),
-            backend_url,
-        },
+        state: AppState::new(store, backend_url),
     })
 }
 
 impl BackendApp {
     pub async fn run(self) -> Result<()> {
+        let store = self.state.store();
         tracing::info!(
             host = %"127.0.0.1",
             port = 1357,
-            root = %self.state.store.paths.root.display(),
+            root = %store.paths.root.display(),
             "starting vurl-backend"
         );
 
@@ -56,6 +52,7 @@ impl BackendApp {
                 .service(api::definition)
                 .service(api::send)
                 .service(api::new_log)
+                .service(api::reload)
                 .route("/", web::get().to(frontend::frontend_index))
                 .route("/{path:.*}", web::get().to(frontend::frontend_asset))
                 .default_service(web::route().to(api::not_found))
