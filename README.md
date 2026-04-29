@@ -38,6 +38,7 @@ source bin/vurl.zsh
 
 ```sh
 vurl
+vurl --no-open
 ```
 
 `vurl` は以下を行います。
@@ -46,6 +47,8 @@ vurl
 - 起動済みでなければ `http://127.0.0.1:1357` をブラウザで開く
 - backend が frontend の `dist` を静的配信する
 - YAML の反映は画面上の `Reload YAML` ボタンから行う
+
+`vurl --no-open` は backend を通常どおり起動しますが、ブラウザは開きません。
 
 補助コマンド:
 

@@ -33,6 +33,7 @@ function _vurl_start() {
   local frontend_url="${3}"
   local pid_file="${4}"
   local backend_log_file="${5}"
+  local should_open="${6}"
 
   if _vurl_is_running "${pid_file}"; then
     print -r -- "vurl is already running."
@@ -54,7 +55,7 @@ function _vurl_start() {
     return 1
   fi
 
-  if command -v open >/dev/null 2>&1; then
+  if [[ "${should_open}" == "1" ]] && command -v open >/dev/null 2>&1; then
     open "${frontend_url}"
   fi
 
@@ -98,6 +99,7 @@ function _vurl_print_help() {
   cat >&${out_fd} <<'EOF'
 Usage:
   vurl
+  vurl --no-open
   vurl -d | --down
   vurl -l | --log-dir [project]
   vurl -e | --edit
@@ -116,6 +118,7 @@ function vurl() {
   local frontend_url="http://127.0.0.1:1357"
   local pid_file="${runtime_dir}/backend.pid"
   local backend_log_file="${runtime_dir}/backend.log"
+  local should_open="1"
 
   if [[ ! -x "${backend_bin}" ]]; then
     print "missing backend binary: ${backend_bin}" >&2
@@ -124,13 +127,9 @@ function vurl() {
 
   case "${1:-}" in
     "")
-      _vurl_start \
-        "${runtime_dir}" \
-        "${backend_bin}" \
-        "${frontend_url}" \
-        "${pid_file}" \
-        "${backend_log_file}"
-      return $?
+      ;;
+    --no-open)
+      should_open="0"
       ;;
     -d|--down)
       _vurl_stop "${pid_file}"
@@ -164,4 +163,13 @@ function vurl() {
       return 1
       ;;
   esac
+
+  _vurl_start \
+    "${runtime_dir}" \
+    "${backend_bin}" \
+    "${frontend_url}" \
+    "${pid_file}" \
+    "${backend_log_file}" \
+    "${should_open}"
+  return $?
 }
