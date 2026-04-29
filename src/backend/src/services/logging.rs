@@ -2,6 +2,7 @@ use std::{fs::OpenOptions, io::Write, path::PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::{Datelike, Local, Timelike};
+use serde_json::Value;
 
 use crate::{
     config::paths::AppPaths, runtime::store::RuntimeStore, services::resolver::ResolveContext,
@@ -60,10 +61,11 @@ pub fn append_request_log(
     project: &str,
     resolver: &ResolveContext,
     curl_command: &str,
+    status_code: u16,
     response_body: &str,
 ) -> Result<PathBuf> {
     let file = ensure_log_file(store, project)?;
-    let mut text = log_block(curl_command, response_body);
+    let mut text = log_block(curl_command, status_code, response_body);
 
     for (value, mask) in resolver.masks() {
         if !value.is_empty() {
@@ -87,10 +89,11 @@ pub fn append_raw_log(
     store: &RuntimeStore,
     project: &str,
     curl_command: &str,
+    status_code: u16,
     response_body: &str,
 ) -> Result<PathBuf> {
     let file = ensure_log_file(store, project)?;
-    let text = log_block(curl_command, response_body);
+    let text = log_block(curl_command, status_code, response_body);
 
     let mut handle = OpenOptions::new()
         .create(true)
@@ -123,9 +126,17 @@ fn touch(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn log_block(curl_command: &str, response_body: &str) -> String {
+fn log_block(curl_command: &str, status_code: u16, response_body: &str) -> String {
     let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S JST");
-    format!("# {timestamp}\n```bash\n{curl_command}\n{response_body}\n```\n\n")
+    let response_body = format_response_body(response_body);
+    format!("# {timestamp}\n```\n{curl_command}\n\n{status_code}\n{response_body}\n```\n\n")
+}
+
+fn format_response_body(response_body: &str) -> String {
+    serde_json::from_str::<Value>(response_body)
+        .ok()
+        .and_then(|json| serde_json::to_string_pretty(&json).ok())
+        .unwrap_or_else(|| response_body.to_string())
 }
 
 #[cfg(test)]
@@ -161,14 +172,17 @@ mod tests {
             "project-1",
             &resolver,
             "curl -X POST 'http://example.test' \\\n  -H 'X-Token: secret-token' \\\n  -d 'token=secret-token'",
+            200,
             "{\"token\":\"secret-token\"}",
         )?;
 
         let text = std::fs::read_to_string(file)?;
-        assert!(text.contains("```bash"));
+        assert!(text.contains("```\ncurl -X POST"));
+        assert!(text.contains("\n\n200\n"));
         assert!(text.contains("-d 'token=xxx'"));
         assert!(text.contains("X-Token: xxx"));
-        assert!(text.contains("{\"token\":\"xxx\"}"));
+        assert!(text.contains("{\n  \"token\": \"xxx\"\n}"));
+        assert!(!text.contains("```bash"));
         assert!(!text.contains("secret-token"));
         Ok(())
     }
@@ -183,12 +197,33 @@ mod tests {
             &store,
             "project-1",
             "curl -X POST 'http://example.test' \\\n  -H 'X-Token: secret-token'",
+            201,
             "{\"token\":\"secret-token\"}",
         )?;
 
         let text = std::fs::read_to_string(file)?;
         assert!(text.contains("secret-token"));
-        assert!(text.contains("```bash"));
+        assert!(text.contains("\n\n201\n"));
+        assert!(!text.contains("```bash"));
+        Ok(())
+    }
+
+    #[test]
+    fn append_raw_log_keeps_non_json_response_body_as_is() -> Result<()> {
+        let tmp = tempdir()?;
+        let paths = AppPaths::new(tmp.path())?;
+        let store = RuntimeStore::load(paths)?;
+
+        let file = append_raw_log(
+            &store,
+            "project-1",
+            "curl -X GET 'http://example.test'",
+            200,
+            "plain text response",
+        )?;
+
+        let text = std::fs::read_to_string(file)?;
+        assert!(text.contains("plain text response"));
         Ok(())
     }
 }

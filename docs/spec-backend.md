@@ -70,9 +70,10 @@
 ログ内容:
 
 - 実行可能な `curl` 形式のリクエスト
+- HTTP `status code`
 - レスポンス本文の生文字列
 
-`status code` と `response headers` はログへ出さない。
+`response headers` はログへ出さない。
 
 ## 静的配信
 

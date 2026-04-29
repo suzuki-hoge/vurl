@@ -71,10 +71,7 @@ async function buildResponseError(response: Response): Promise<Error> {
   const text = await response.text()
   const message = parseErrorMessage(text)
   return new Error(
-    [
-      `HTTP ${response.status} ${response.statusText}`.trim(),
-      message
-    ]
+    [`HTTP ${response.status} ${response.statusText}`.trim(), message]
       .filter(Boolean)
       .join("\n\n")
   )

@@ -129,8 +129,14 @@ pub async fn execute_request(
             continue;
         }
 
-        let log_file =
-            append_request_log(store, &input.project, &resolver, &curl, &response.body_text)?;
+        let log_file = append_request_log(
+            store,
+            &input.project,
+            &resolver,
+            &curl,
+            response.status,
+            &response.body_text,
+        )?;
         let notifications = if http_authenticated {
             vec![ResponseNotification {
                 code: ResponseNotificationCode::Authenticated,

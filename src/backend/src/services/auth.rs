@@ -90,7 +90,7 @@ pub async fn authenticate(
             let curl = build_curl(&prepared);
             let response = send(&prepared, REQUEST_TIMEOUT_MS).await?;
             let text = response.body_text;
-            let _ = append_raw_log(store, project, &curl, &text);
+            let _ = append_raw_log(store, project, &curl, response.status, &text);
             if !(200..300).contains(&response.status) {
                 bail!("auth request failed: {} {}", response.status, text);
             }

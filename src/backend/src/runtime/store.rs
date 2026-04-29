@@ -297,7 +297,10 @@ fn validate_form_field(field: &FormFieldDefinition) -> Result<()> {
     }
 
     if field.value.is_some() {
-        bail!("form field '{}' with items must not define value", field.key);
+        bail!(
+            "form field '{}' with items must not define value",
+            field.key
+        );
     }
 
     let default_count = field.items.iter().filter(|item| item.default).count();

@@ -753,11 +753,7 @@ function ErrorModal(props: { message: string; onClose: () => void }) {
   }
 
   return (
-    <div
-      className="error-modal-backdrop"
-      onClick={onClose}
-      role="presentation"
-    >
+    <div className="error-modal-backdrop" onClick={onClose} role="presentation">
       <div
         aria-labelledby="error-modal-title"
         aria-modal="true"
